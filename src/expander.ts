@@ -48,6 +48,18 @@ export function expansionSize(ast: DomainNode): number {
   return total;
 }
 
+function uniqueStrings(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    if (!seen.has(value)) {
+      seen.add(value);
+      result.push(value);
+    }
+  }
+  return result;
+}
+
 function labelExpansionSize(label: LabelNode): number {
   let size = 1;
 
@@ -67,7 +79,7 @@ function elementExpansionSize(element: ElementNode): number {
     case 'literal':
       return 1;
     case 'alternation':
-      return element.options.length;
+      return uniqueStrings(element.options).length;
     case 'charclass':
       return Math.pow(element.chars.length, element.repetition);
   }
@@ -119,7 +131,7 @@ function expandElement(element: ElementNode): string[] {
       return [element.value];
 
     case 'alternation':
-      return [...element.options];
+      return uniqueStrings(element.options);
 
     case 'charclass':
       return expandCharClass(element.chars, element.repetition);

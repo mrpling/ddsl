@@ -113,6 +113,11 @@ describe('expander', () => {
       const ast = parse('[a-z]{10}.com');
       expect(expansionSize(ast)).toBe(26 ** 10);
     });
+
+    it('deduplicates alternation options', () => {
+      const ast = parse('{car,car}.com');
+      expect(expansionSize(ast)).toBe(1);
+    });
   });
 
   describe('expansion limits (Section 8.3)', () => {
@@ -144,6 +149,12 @@ describe('expander', () => {
       const a = ddsl('{fast,smart}{car,bike}.com');
       const b = ddsl('{fast,smart}{car,bike}.com');
       expect(a).toEqual(b);
+    });
+  });
+
+  describe('set semantics (Section 8)', () => {
+    it('removes duplicate alternation outputs', () => {
+      expect(ddsl('{car,car}.com')).toEqual(['car.com']);
     });
   });
 });
