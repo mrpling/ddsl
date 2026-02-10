@@ -16,7 +16,7 @@ export class ExpansionError extends Error {
 }
 
 /** Default maximum expansion size (can be overridden). */
-const DEFAULT_MAX_EXPANSION = 1_000_000;
+const DEFAULT_MAX_EXPANSION = 100_000;
 
 export interface ExpandOptions {
   /**
@@ -90,26 +90,18 @@ function elementExpansionSize(element: ElementNode): number {
  *
  * Section 8.4: All output domain names are lowercase, use '.' as the
  * label separator, and do not contain a trailing dot.
+ *
+ * If maxExpansion is set, results are capped at that limit (no error thrown).
  */
 export function expand(ast: DomainNode, options?: ExpandOptions): string[] {
   const maxExpansion = options?.maxExpansion ?? DEFAULT_MAX_EXPANSION;
-
-  // Check expansion size before expanding
-  if (maxExpansion > 0 && maxExpansion !== Infinity) {
-    const size = expansionSize(ast);
-    if (size > maxExpansion) {
-      throw new ExpansionError(
-        `Expression would expand to ${size.toLocaleString()} domains, ` +
-        `which exceeds the limit of ${maxExpansion.toLocaleString()}`,
-      );
-    }
-  }
+  const limit = (maxExpansion > 0 && maxExpansion !== Infinity) ? maxExpansion : Infinity;
 
   // Expand each label into its set of possible strings
   const labelSets = ast.labels.map(expandLabel);
 
-  // Cartesian product across labels, joined by '.'
-  return cartesianProduct(labelSets).map(parts => parts.join('.'));
+  // Cartesian product across labels, joined by '.', with optional cap
+  return cartesianProductCapped(labelSets, limit).map(parts => parts.join('.'));
 }
 
 /**
@@ -172,6 +164,30 @@ function cartesianProduct(sets: string[][]): string[][] {
     for (const existing of result) {
       for (const item of set) {
         next.push([...existing, item]);
+      }
+    }
+    result = next;
+  }
+
+  return result;
+}
+
+/**
+ * Compute the Cartesian product with an optional cap on results.
+ * Stops early once the limit is reached.
+ */
+function cartesianProductCapped(sets: string[][], limit: number): string[][] {
+  if (sets.length === 0) return [[]];
+
+  let result: string[][] = [[]];
+
+  //allow each set to finish but cap to results for each set
+  for (const set of sets) {
+    const next: string[][] = [];
+    outer: for (const existing of result) {
+      for (const item of set) {
+        next.push([...existing, item]);
+        if (next.length >= limit) break outer;
       }
     }
     result = next;

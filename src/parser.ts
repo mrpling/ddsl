@@ -58,8 +58,8 @@ function expandRange(start: string, end: string): string[] {
 }
 
 export function parse(input: string): DomainNode {
-  // Section 4.3: normalise to lowercase
-  const src = input.toLowerCase();
+  // Strip all whitespace (spaces, tabs, newlines, etc.) and normalise to lowercase
+  const src = input.replace(/\s+/g, '').toLowerCase();
 
   if (src.length === 0) {
     throw new ParseError('Empty expression', 0);

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parse } from '../src/parser';
-import { expand, expansionSize, ExpansionError } from '../src/expander';
+import { expand, expansionSize } from '../src/expander';
 
 /**
  * Helper: parse + expand, return sorted results for deterministic comparison.
@@ -121,26 +121,28 @@ describe('expander', () => {
   });
 
   describe('expansion limits (Section 8.3)', () => {
-    it('throws when expansion exceeds limit', () => {
-      const ast = parse('[a-z]{10}.com');
-      expect(() => expand(ast, { maxExpansion: 1_000_000 }))
-        .toThrow(ExpansionError);
+    it('caps results at maxExpansion', () => {
+      const ast = parse('[a-z]{3}.ai');
+      const result = expand(ast, { maxExpansion: 100 });
+      expect(result).toHaveLength(100);
     });
 
     it('respects custom limit', () => {
       const ast = parse('[a-z]{3}.ai');
-      expect(() => expand(ast, { maxExpansion: 100 }))
-        .toThrow(ExpansionError);
+      const result = expand(ast, { maxExpansion: 50 });
+      expect(result).toHaveLength(50);
     });
 
     it('allows expansion within limit', () => {
       const ast = parse('{car,bike}.com');
-      expect(() => expand(ast, { maxExpansion: 10 })).not.toThrow();
+      const result = expand(ast, { maxExpansion: 10 });
+      expect(result).toHaveLength(2);
     });
 
     it('disables limit with Infinity', () => {
       const ast = parse('[a-z]{3}.ai');
-      expect(() => expand(ast, { maxExpansion: Infinity })).not.toThrow();
+      const result = expand(ast, { maxExpansion: Infinity });
+      expect(result).toHaveLength(26 ** 3);
     });
   });
 
