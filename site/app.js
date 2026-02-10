@@ -6,6 +6,8 @@ const countEl = document.getElementById('count');
 const resultsEl = document.getElementById('results');
 const errorEl = document.getElementById('error');
 
+const PREVIEW_LIMIT = 10;
+
 function showError(message) {
   errorEl.textContent = message;
   errorEl.hidden = false;
@@ -25,7 +27,7 @@ function displayResults(domains, total, cap = null) {
 
   let countText = `Expands to ${total.toLocaleString()} domain${total === 1 ? '' : 's'}`;
   if (cap !== null && domains.length < total) {
-    countText += `, capped at ${cap.toLocaleString()}`;
+    countText += `, showing first ${cap.toLocaleString()}`;
   }
 
   countEl.textContent = countText;
@@ -34,8 +36,8 @@ function displayResults(domains, total, cap = null) {
 }
 
 function check() {
-  const expression = textarea.value.trim();
-  if (!expression) {
+  const raw = textarea.value.trim();
+  if (!raw) {
     countEl.textContent = 'Enter an expression to expand';
     countEl.classList.remove('has-results');
     resultsEl.value = '';
@@ -45,20 +47,20 @@ function check() {
   }
 
   try {
+    // Preprocess input (strip whitespace) before parsing
+    const expression = DDSL.prepare(raw);
     const ast = DDSL.parse(expression);
-    const total = DDSL.expansionSize(ast);
-    const preview = DDSL.expand(ast, { maxExpansion: 10 });
-    displayResults(preview, total, 10);
+    // Use preview() which never throws on large expressions
+    const result = DDSL.preview(ast, PREVIEW_LIMIT);
+    displayResults(result.domains, result.total, result.truncated ? PREVIEW_LIMIT : null);
   } catch (err) {
     showError(err.message);
   }
 }
 
-const DEFAULT_MAX_EXPANSION = 100_000;
-
 function expandAll() {
-  const expression = textarea.value.trim();
-  if (!expression) {
+  const raw = textarea.value.trim();
+  if (!raw) {
     countEl.textContent = 'Enter an expression to expand';
     countEl.classList.remove('has-results');
     resultsEl.value = '';
@@ -68,11 +70,12 @@ function expandAll() {
   }
 
   try {
+    // Preprocess input (strip whitespace) before parsing
+    const expression = DDSL.prepare(raw);
     const ast = DDSL.parse(expression);
-    const total = DDSL.expansionSize(ast);
+    // expand() throws ExpansionError if too large
     const domains = DDSL.expand(ast);
-    const wasCapped = total > DEFAULT_MAX_EXPANSION;
-    displayResults(domains, total, wasCapped ? DEFAULT_MAX_EXPANSION : null);
+    displayResults(domains, domains.length, null);
   } catch (err) {
     showError(err.message);
   }

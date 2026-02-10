@@ -26,7 +26,9 @@ var DDSL = (() => {
     ddsl: () => ddsl,
     expand: () => expand,
     expansionSize: () => expansionSize,
-    parse: () => parse
+    parse: () => parse,
+    prepare: () => prepare,
+    preview: () => preview
   });
 
   // src/parser.ts
@@ -60,8 +62,11 @@ var DDSL = (() => {
     }
     return result;
   }
+  function prepare(input) {
+    return input.replace(/\s+/g, "");
+  }
   function parse(input) {
-    const src = input.replace(/\s+/g, "").toLowerCase();
+    const src = input.toLowerCase();
     if (src.length === 0) {
       throw new ParseError("Empty expression", 0);
     }
@@ -248,7 +253,7 @@ var DDSL = (() => {
       this.name = "ExpansionError";
     }
   };
-  var DEFAULT_MAX_EXPANSION = 1e5;
+  var DEFAULT_MAX_EXPANSION = 1e6;
   function expansionSize(ast) {
     let total = 1;
     for (const label of ast.labels) {
@@ -293,9 +298,23 @@ var DDSL = (() => {
   }
   function expand(ast, options) {
     const maxExpansion = options?.maxExpansion ?? DEFAULT_MAX_EXPANSION;
-    const limit = maxExpansion > 0 && maxExpansion !== Infinity ? maxExpansion : Infinity;
+    if (maxExpansion > 0 && maxExpansion !== Infinity) {
+      const size = expansionSize(ast);
+      if (size > maxExpansion) {
+        throw new ExpansionError(
+          `Expression would expand to ${size.toLocaleString()} domains, which exceeds the limit of ${maxExpansion.toLocaleString()}`
+        );
+      }
+    }
     const labelSets = ast.labels.map(expandLabel);
-    return cartesianProductCapped(labelSets, limit).map((parts) => parts.join("."));
+    return [...new Set(cartesianProduct(labelSets).map((parts) => parts.join(".")))];
+  }
+  function preview(ast, limit) {
+    const total = expansionSize(ast);
+    const truncated = total > limit;
+    const labelSets = ast.labels.map(expandLabel);
+    const domains = [...new Set(cartesianProductCapped(labelSets, limit).map((parts) => parts.join(".")))];
+    return { domains, total, truncated };
   }
   function expandLabel(label) {
     const elementSets = label.elements.map(expandElement);

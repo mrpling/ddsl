@@ -16,7 +16,7 @@ export class ExpansionError extends Error {
 }
 
 /** Default maximum expansion size (can be overridden). */
-const DEFAULT_MAX_EXPANSION = 100_000;
+const DEFAULT_MAX_EXPANSION = 1_000_000;
 
 export interface ExpandOptions {
   /**
@@ -26,6 +26,15 @@ export interface ExpandOptions {
    * Default: 1,000,000
    */
   maxExpansion?: number;
+}
+
+export interface PreviewResult {
+  /** The (possibly truncated) list of domain names */
+  domains: string[];
+  /** The total number of domains the expression would expand to */
+  total: number;
+  /** Whether the results were truncated due to the limit */
+  truncated: boolean;
 }
 
 /**
@@ -91,17 +100,48 @@ function elementExpansionSize(element: ElementNode): number {
  * Section 8.4: All output domain names are lowercase, use '.' as the
  * label separator, and do not contain a trailing dot.
  *
- * If maxExpansion is set, results are capped at that limit (no error thrown).
+ * Throws ExpansionError if the expansion would exceed maxExpansion.
  */
 export function expand(ast: DomainNode, options?: ExpandOptions): string[] {
   const maxExpansion = options?.maxExpansion ?? DEFAULT_MAX_EXPANSION;
-  const limit = (maxExpansion > 0 && maxExpansion !== Infinity) ? maxExpansion : Infinity;
+
+  // Check expansion size before expanding
+  if (maxExpansion > 0 && maxExpansion !== Infinity) {
+    const size = expansionSize(ast);
+    if (size > maxExpansion) {
+      throw new ExpansionError(
+        `Expression would expand to ${size.toLocaleString()} domains, ` +
+        `which exceeds the limit of ${maxExpansion.toLocaleString()}`,
+      );
+    }
+  }
 
   // Expand each label into its set of possible strings
   const labelSets = ast.labels.map(expandLabel);
 
-  // Cartesian product across labels, joined by '.', with optional cap
-  return cartesianProductCapped(labelSets, limit).map(parts => parts.join('.'));
+  // Cartesian product across labels with deduplication, joined by '.'
+  return [...new Set(cartesianProduct(labelSets).map(parts => parts.join('.')))];
+}
+
+/**
+ * Preview an expansion with a capped result set.
+ * Unlike expand(), this never throws on large expressions - it simply
+ * truncates the results and indicates truncation in the response.
+ *
+ * Use this for UI previews where you want to show a sample of results
+ * without risking errors on large expressions.
+ */
+export function preview(ast: DomainNode, limit: number): PreviewResult {
+  const total = expansionSize(ast);
+  const truncated = total > limit;
+
+  // Expand each label into its set of possible strings
+  const labelSets = ast.labels.map(expandLabel);
+
+  // Cartesian product with cap
+  const domains = [...new Set(cartesianProductCapped(labelSets, limit).map(parts => parts.join('.')))];
+
+  return { domains, total, truncated };
 }
 
 /**

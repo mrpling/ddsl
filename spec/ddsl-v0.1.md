@@ -90,9 +90,17 @@ Every valid DDSL expression represents a finite set of domain names.
 
 A single literal domain is a valid DDSL expression and represents a set of one.
 
+Because the result is a set, duplicate values are removed. If an expression produces the same domain name more than once (for example, through duplicate alternation options), the result contains that domain name only once. Implementations MUST deduplicate expansion output.
+
 ### 4.3 Case Sensitivity
 
 DDSL is case-insensitive. Implementations MUST normalise all input to lowercase before parsing. The grammar defines only lowercase letters; uppercase input is accepted but treated identically to its lowercase equivalent.
+
+### 4.4 Whitespace
+
+DDSL expressions MUST NOT contain whitespace. Spaces, tabs, newlines, and other whitespace characters are not part of the grammar and MUST be rejected by a conforming parser.
+
+Applications that accept user input SHOULD strip whitespace before passing the input to the parser. This preprocessing step is outside the scope of the language itself. The reference implementation provides a `prepare()` function for this purpose.
 
 ---
 
@@ -236,6 +244,8 @@ digit       = "0"-"9" ;
 
 **Alternation items are literals only.** Nested alternations (e.g. `{{a,b}c,d}`) and character classes inside alternations (e.g. `{[a-z]{2},foo}`) are not supported in v0.1.
 
+**Whitespace is not permitted.** The grammar does not include whitespace at any position. See Section 4.4.
+
 ---
 
 ## 8. Expansion Semantics
@@ -244,7 +254,8 @@ A conforming implementation must:
 
 1. Parse the expression into its structural components.
 2. Compute the Cartesian product of all alternations and character classes.
-3. Produce the complete set of resulting domain names.
+3. Deduplicate the results (see Section 4.2).
+4. Produce the complete set of resulting domain names.
 
 ### 8.1 Determinism
 
@@ -283,19 +294,21 @@ example.com
 {api,dev}.{tools,cloud}
 123.com
 0x.ai
+{car,car}.com            → expands to: car.com (duplicates removed)
 ```
 
 ### 9.2 Invalid (v0.1)
 
 ```
-[a-z]{3,5}.com     ? repetition ranges not supported
-car?.com           ? optional syntax not supported
-car{1-10}.com      ? numeric ranges not supported
-.com               ? empty label
-..com              ? empty label
-{[a-z]{2},foo}.com ? character classes inside alternation not supported
-{{a,b}c,d}.com     ? nested alternation not supported
-(empty string)     ? empty expressions are not allowed
+[a-z]{3,5}.com     ← repetition ranges not supported
+car?.com           ← optional syntax not supported
+car{1-10}.com      ← numeric ranges not supported
+.com               ← empty label
+..com              ← empty label
+{[a-z]{2},foo}.com ← character classes inside alternation not supported
+{{a,b}c,d}.com     ← nested alternation not supported
+(empty string)     ← empty expressions are not allowed
+{ car, bike }.com  ← whitespace not permitted
 ```
 
 ---
@@ -305,8 +318,9 @@ car{1-10}.com      ? numeric ranges not supported
 An implementation conforms to DDSL v0.1 if it:
 
 1. Accepts all valid expressions defined by this specification.
-2. Rejects invalid expressions.
+2. Rejects invalid expressions (including those containing whitespace).
 3. Expands valid expressions into the correct finite set of domains.
+4. Deduplicates expansion output.
 
 ---
 
@@ -333,13 +347,30 @@ Implementations are encouraged to provide validation as a separate pass from par
 
 ---
 
-## 12. Versioning
+## 12. Input Preprocessing (Non-normative)
+
+Applications that accept DDSL expressions from users (such as web interfaces, command-line tools, or APIs) will often need to preprocess the input before passing it to a conforming parser.
+
+Common preprocessing steps include:
+
+- stripping whitespace (spaces, tabs, newlines)
+- trimming leading and trailing whitespace
+- splitting multi-line input into separate expressions
+
+These steps are outside the scope of the DDSL language. The parser itself MUST reject whitespace (see Section 4.4). Preprocessing is the responsibility of the application layer.
+
+The reference implementation provides a `prepare()` function that strips all whitespace from a string, suitable for use before calling `parse()`.
+
+---
+
+## 13. Versioning
 
 Future versions of DDSL may introduce:
 
 - nested alternations
 - optional segments
 - length ranges
+- variables and macros
 - structural constraints
 - objective metrics
 - extension profiles
@@ -348,7 +379,7 @@ These features are intentionally excluded from v0.1 to preserve simplicity and s
 
 ---
 
-## 13. Reference Implementation
+## 14. Reference Implementation
 
 A reference implementation will be provided at:
 

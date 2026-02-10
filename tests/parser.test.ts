@@ -169,9 +169,8 @@ describe('parser', () => {
       expect(() => parse('hello@world.com')).toThrow(ParseError);
     });
 
-    it('strips whitespace and parses successfully', () => {
-      const result = parse('hello world.com');
-      expect(result.labels[0].elements[0]).toEqual({ type: 'literal', value: 'helloworld' });
+    it('rejects spaces', () => {
+      expect(() => parse('hello world.com')).toThrow(ParseError);
     });
   });
 });

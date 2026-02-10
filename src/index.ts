@@ -21,9 +21,9 @@ export type {
   AlternationNode,
 } from './types';
 
-export { parse, ParseError } from './parser';
-export { expand, expansionSize, ExpansionError } from './expander';
-export type { ExpandOptions } from './expander';
+export { parse, prepare, ParseError } from './parser';
+export { expand, preview, expansionSize, ExpansionError } from './expander';
+export type { ExpandOptions, PreviewResult } from './expander';
 
 /**
  * Parse and expand a DDSL expression in one step.

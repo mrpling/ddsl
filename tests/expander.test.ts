@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parse } from '../src/parser';
-import { expand, expansionSize } from '../src/expander';
+import { expand, preview, expansionSize, ExpansionError } from '../src/expander';
 
 /**
  * Helper: parse + expand, return sorted results for deterministic comparison.
@@ -121,28 +121,55 @@ describe('expander', () => {
   });
 
   describe('expansion limits (Section 8.3)', () => {
-    it('caps results at maxExpansion', () => {
-      const ast = parse('[a-z]{3}.ai');
-      const result = expand(ast, { maxExpansion: 100 });
-      expect(result).toHaveLength(100);
+    it('throws when expansion exceeds limit', () => {
+      const ast = parse('[a-z]{10}.com');
+      expect(() => expand(ast, { maxExpansion: 1_000_000 }))
+        .toThrow(ExpansionError);
     });
 
     it('respects custom limit', () => {
       const ast = parse('[a-z]{3}.ai');
-      const result = expand(ast, { maxExpansion: 50 });
-      expect(result).toHaveLength(50);
+      expect(() => expand(ast, { maxExpansion: 100 }))
+        .toThrow(ExpansionError);
     });
 
     it('allows expansion within limit', () => {
       const ast = parse('{car,bike}.com');
-      const result = expand(ast, { maxExpansion: 10 });
-      expect(result).toHaveLength(2);
+      expect(() => expand(ast, { maxExpansion: 10 })).not.toThrow();
     });
 
     it('disables limit with Infinity', () => {
       const ast = parse('[a-z]{3}.ai');
-      const result = expand(ast, { maxExpansion: Infinity });
-      expect(result).toHaveLength(26 ** 3);
+      expect(() => expand(ast, { maxExpansion: Infinity })).not.toThrow();
+    });
+  });
+
+  describe('preview function', () => {
+    it('returns truncated results with total count', () => {
+      const ast = parse('[a-z]{3}.ai');
+      const result = preview(ast, 100);
+      expect(result.domains).toHaveLength(100);
+      expect(result.total).toBe(26 ** 3);
+      expect(result.truncated).toBe(true);
+    });
+
+    it('returns full results when under limit', () => {
+      const ast = parse('{car,bike}.com');
+      const result = preview(ast, 100);
+      expect(result.domains).toHaveLength(2);
+      expect(result.total).toBe(2);
+      expect(result.truncated).toBe(false);
+    });
+
+    it('handles large multi-label expressions', () => {
+      // Note: preview() expands each label fully before capping the cartesian product,
+      // so individual labels must fit in memory. Use multi-label expressions for large totals.
+      const ast = parse('[a-z]{2}.[a-z]{2}.[a-z]{2}.com');
+      expect(() => preview(ast, 10)).not.toThrow();
+      const result = preview(ast, 10);
+      expect(result.domains).toHaveLength(10);
+      expect(result.total).toBe(26 ** 6); // 308,915,776
+      expect(result.truncated).toBe(true);
     });
   });
 

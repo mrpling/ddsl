@@ -57,9 +57,23 @@ function expandRange(start: string, end: string): string[] {
   return result;
 }
 
+/**
+ * Prepare user input for parsing by stripping whitespace.
+ * Use this in application code before calling parse().
+ *
+ * @example
+ * ```ts
+ * const cleaned = prepare('  {car, bike}.com  ');
+ * const ast = parse(cleaned);
+ * ```
+ */
+export function prepare(input: string): string {
+  return input.replace(/\s+/g, '');
+}
+
 export function parse(input: string): DomainNode {
-  // Strip all whitespace (spaces, tabs, newlines, etc.) and normalise to lowercase
-  const src = input.replace(/\s+/g, '').toLowerCase();
+  // Section 4.3: normalise to lowercase
+  const src = input.toLowerCase();
 
   if (src.length === 0) {
     throw new ParseError('Empty expression', 0);
