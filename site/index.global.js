@@ -65,10 +65,26 @@ var DDSL = (() => {
   function prepare(input) {
     return input.replace(/\s+/g, "");
   }
+  function canProduceEmpty(elements) {
+    return elements.every((el) => {
+      if (el.optional) return true;
+      const p = el.primary;
+      if (p.type === "charclass" && p.repetitionMin === 0) return true;
+      if (p.type === "group") return canProduceEmpty(p.elements);
+      if (p.type === "alternation") {
+        return p.options.every((opt) => canProduceEmpty(opt));
+      }
+      return false;
+    });
+  }
   function parse(input) {
     const src = input.toLowerCase();
     if (src.length === 0) {
       throw new ParseError("Empty expression", 0);
+    }
+    if (/\s/.test(src)) {
+      const pos2 = src.search(/\s/);
+      throw new ParseError("Whitespace is not permitted", pos2);
     }
     let pos = 0;
     function peek() {
@@ -96,25 +112,52 @@ var DDSL = (() => {
       return { type: "domain", labels };
     }
     function parseLabel() {
-      const elements = [];
+      const startPos = pos;
       if (pos >= src.length || peek() === ".") {
         throw new ParseError("Empty label", pos);
       }
-      while (pos < src.length && peek() !== ".") {
-        elements.push(parseElement());
-      }
+      const elements = parseSequence();
       if (elements.length === 0) {
-        throw new ParseError("Empty label", pos);
+        throw new ParseError("Empty label", startPos);
+      }
+      if (canProduceEmpty(elements)) {
+        throw new ParseError(
+          "Label must produce at least one character in every expansion branch",
+          startPos
+        );
       }
       return { type: "label", elements };
     }
+    function parseSequence() {
+      const elements = [];
+      while (pos < src.length) {
+        const ch = peek();
+        if (ch === "." || ch === "," || ch === ")" || ch === "}") {
+          break;
+        }
+        elements.push(parseElement());
+      }
+      return elements;
+    }
     function parseElement() {
+      const primary = parsePrimary();
+      let optional = false;
+      if (peek() === "?") {
+        advance();
+        optional = true;
+      }
+      return { primary, optional };
+    }
+    function parsePrimary() {
       const ch = peek();
       if (ch === "[") {
         return parseCharClass();
       }
       if (ch === "{") {
         return parseAlternation();
+      }
+      if (ch === "(") {
+        return parseGroup();
       }
       if (ch !== void 0 && isLiteralChar(ch)) {
         return parseLiteral();
@@ -140,14 +183,32 @@ var DDSL = (() => {
       }
       return { type: "literal", value };
     }
+    function parseGroup() {
+      const start = pos;
+      expect("(");
+      const elements = parseSequence();
+      if (elements.length === 0) {
+        throw new ParseError("Empty group", start);
+      }
+      expect(")");
+      return { type: "group", elements };
+    }
     function parseAlternation() {
       const start = pos;
       expect("{");
       const options = [];
-      options.push(parseAltItem());
+      const firstSeq = parseSequence();
+      if (firstSeq.length === 0) {
+        throw new ParseError("Empty alternation item", pos);
+      }
+      options.push(firstSeq);
       while (peek() === ",") {
         advance();
-        options.push(parseAltItem());
+        const seq = parseSequence();
+        if (seq.length === 0) {
+          throw new ParseError("Empty alternation item", pos);
+        }
+        options.push(seq);
       }
       expect("}");
       if (options.length < 2) {
@@ -157,21 +218,6 @@ var DDSL = (() => {
         );
       }
       return { type: "alternation", options };
-    }
-    function parseAltItem() {
-      let value = "";
-      while (pos < src.length) {
-        const ch = peek();
-        if (isLiteralChar(ch)) {
-          value += advance();
-        } else {
-          break;
-        }
-      }
-      if (value.length === 0) {
-        throw new ParseError("Empty alternation item", pos);
-      }
-      return value;
     }
     function parseCharClass() {
       const start = pos;
@@ -212,31 +258,51 @@ var DDSL = (() => {
       expect("]");
       if (peek() !== "{") {
         throw new ParseError(
-          "Character class must be followed by a repetition like {3}",
+          "Character class must be followed by a repetition like {3} or {2,5}",
           pos
         );
       }
       expect("{");
       let numStr = "";
-      while (pos < src.length && peek() !== "}") {
+      while (pos < src.length && peek() !== "}" && peek() !== ",") {
         const ch = advance();
         if (!isDigit(ch)) {
           throw new ParseError(`Expected digit in repetition, got '${ch}'`, pos - 1);
         }
         numStr += ch;
       }
-      expect("}");
       if (numStr.length === 0) {
         throw new ParseError("Empty repetition count", pos);
       }
-      const repetition = parseInt(numStr, 10);
-      if (repetition === 0) {
-        throw new ParseError("Repetition count must be at least 1", pos);
+      let repetitionMin = parseInt(numStr, 10);
+      let repetitionMax = repetitionMin;
+      if (peek() === ",") {
+        advance();
+        let maxStr = "";
+        while (pos < src.length && peek() !== "}") {
+          const ch = advance();
+          if (!isDigit(ch)) {
+            throw new ParseError(`Expected digit in repetition max, got '${ch}'`, pos - 1);
+          }
+          maxStr += ch;
+        }
+        if (maxStr.length === 0) {
+          throw new ParseError("Empty repetition max (open-ended ranges not supported)", pos);
+        }
+        repetitionMax = parseInt(maxStr, 10);
+      }
+      expect("}");
+      if (repetitionMin > repetitionMax) {
+        throw new ParseError(
+          `Invalid repetition range: min (${repetitionMin}) > max (${repetitionMax})`,
+          start
+        );
       }
       return {
         type: "charclass",
         chars: Array.from(charSet).sort(),
-        repetition
+        repetitionMin,
+        repetitionMax
       };
     }
     const ast = parseDomain();
@@ -265,20 +331,12 @@ var DDSL = (() => {
     }
     return total;
   }
-  function uniqueStrings(values) {
-    const seen = /* @__PURE__ */ new Set();
-    const result = [];
-    for (const value of values) {
-      if (!seen.has(value)) {
-        seen.add(value);
-        result.push(value);
-      }
-    }
-    return result;
-  }
   function labelExpansionSize(label) {
+    return sequenceExpansionSize(label.elements);
+  }
+  function sequenceExpansionSize(elements) {
     let size = 1;
-    for (const element of label.elements) {
+    for (const element of elements) {
       size *= elementExpansionSize(element);
       if (!Number.isFinite(size) || size > Number.MAX_SAFE_INTEGER) {
         return Infinity;
@@ -287,13 +345,38 @@ var DDSL = (() => {
     return size;
   }
   function elementExpansionSize(element) {
-    switch (element.type) {
+    const primarySize = primaryExpansionSize(element.primary);
+    if (element.optional) {
+      return primarySize + 1;
+    }
+    return primarySize;
+  }
+  function primaryExpansionSize(primary) {
+    switch (primary.type) {
       case "literal":
         return 1;
-      case "alternation":
-        return uniqueStrings(element.options).length;
-      case "charclass":
-        return Math.pow(element.chars.length, element.repetition);
+      case "alternation": {
+        let total = 0;
+        for (const option of primary.options) {
+          total += sequenceExpansionSize(option);
+          if (!Number.isFinite(total) || total > Number.MAX_SAFE_INTEGER) {
+            return Infinity;
+          }
+        }
+        return total;
+      }
+      case "charclass": {
+        let total = 0;
+        for (let r = primary.repetitionMin; r <= primary.repetitionMax; r++) {
+          total += Math.pow(primary.chars.length, r);
+          if (!Number.isFinite(total) || total > Number.MAX_SAFE_INTEGER) {
+            return Infinity;
+          }
+        }
+        return total;
+      }
+      case "group":
+        return sequenceExpansionSize(primary.elements);
     }
   }
   function expand(ast, options) {
@@ -317,20 +400,49 @@ var DDSL = (() => {
     return { domains, total, truncated };
   }
   function expandLabel(label) {
-    const elementSets = label.elements.map(expandElement);
+    return expandSequence(label.elements);
+  }
+  function expandSequence(elements) {
+    const elementSets = elements.map(expandElement);
     return cartesianProduct(elementSets).map((parts) => parts.join(""));
   }
   function expandElement(element) {
-    switch (element.type) {
+    const primaryStrings = expandPrimary(element.primary);
+    if (element.optional) {
+      const result = ["", ...primaryStrings];
+      return [...new Set(result)];
+    }
+    return primaryStrings;
+  }
+  function expandPrimary(primary) {
+    switch (primary.type) {
       case "literal":
-        return [element.value];
-      case "alternation":
-        return uniqueStrings(element.options);
+        return [primary.value];
+      case "alternation": {
+        const results = [];
+        for (const option of primary.options) {
+          results.push(...expandSequence(option));
+        }
+        return [...new Set(results)];
+      }
       case "charclass":
-        return expandCharClass(element.chars, element.repetition);
+        return expandCharClass(primary.chars, primary.repetitionMin, primary.repetitionMax);
+      case "group":
+        return expandSequence(primary.elements);
     }
   }
-  function expandCharClass(chars, repetition) {
+  function expandCharClass(chars, min, max) {
+    const results = [];
+    for (let rep = min; rep <= max; rep++) {
+      if (rep === 0) {
+        results.push("");
+      } else {
+        results.push(...expandCharClassFixed(chars, rep));
+      }
+    }
+    return results;
+  }
+  function expandCharClassFixed(chars, repetition) {
     if (repetition === 0) return [""];
     let results = chars.map((c) => c);
     for (let i = 1; i < repetition; i++) {

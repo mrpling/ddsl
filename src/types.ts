@@ -1,8 +1,8 @@
 /**
- * DDSL v0.1 — AST Node Types
+ * DDSL v0.2 — AST Node Types
  *
  * These types mirror the formal grammar defined in Section 7
- * of the DDSL v0.1 specification.
+ * of the DDSL v0.2 specification.
  */
 
 /** A complete DDSL expression: one or more labels separated by dots. */
@@ -11,14 +11,23 @@ export interface DomainNode {
   labels: LabelNode[];
 }
 
-/** A single label: one or more elements concatenated. */
+/** A single label: a sequence of elements concatenated. */
 export interface LabelNode {
   type: 'label';
   elements: ElementNode[];
 }
 
-/** An element within a label. */
-export type ElementNode = LiteralNode | CharClassNode | AlternationNode;
+/**
+ * An element within a label.
+ * element = primary, [ "?" ] ;
+ */
+export interface ElementNode {
+  primary: PrimaryNode;
+  optional: boolean;
+}
+
+/** A primary element (before optional ? is applied). */
+export type PrimaryNode = LiteralNode | CharClassNode | AlternationNode | GroupNode;
 
 /** A fixed string of literal characters. */
 export interface LiteralNode {
@@ -26,15 +35,31 @@ export interface LiteralNode {
   value: string;
 }
 
-/** A character class with fixed repetition, e.g. [a-z]{3} */
+/**
+ * A character class with repetition, e.g. [a-z]{3} or [a-z]{3,5}
+ * repetition = "{", number, "}" | "{", number, ",", number, "}" ;
+ */
 export interface CharClassNode {
   type: 'charclass';
-  chars: string[];      // expanded list of individual characters
-  repetition: number;
+  chars: string[];           // expanded list of individual characters
+  repetitionMin: number;
+  repetitionMax: number;
 }
 
-/** An alternation between literal options, e.g. {car,bike} */
+/**
+ * An alternation between sequences, e.g. {car,bike} or {smart{car,bike},fast}
+ * alternation = "{", sequence, { ",", sequence }, "}" ;
+ */
 export interface AlternationNode {
   type: 'alternation';
-  options: string[];
+  options: ElementNode[][];  // each option is a sequence of elements
+}
+
+/**
+ * A group containing a sequence, e.g. (abc) or (smart{car,bike})
+ * group = "(", sequence, ")" ;
+ */
+export interface GroupNode {
+  type: 'group';
+  elements: ElementNode[];
 }

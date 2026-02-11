@@ -1,5 +1,5 @@
 /**
- * DDSL v0.1 — Parser
+ * DDSL v0.2 — Parser
  *
  * A recursive descent parser that transforms a DDSL expression string
  * into an AST (see types.ts). Implements the grammar from Section 7
@@ -10,9 +10,11 @@ import type {
   DomainNode,
   LabelNode,
   ElementNode,
+  PrimaryNode,
   LiteralNode,
   CharClassNode,
   AlternationNode,
+  GroupNode,
 } from './types';
 
 export class ParseError extends Error {
@@ -71,12 +73,35 @@ export function prepare(input: string): string {
   return input.replace(/\s+/g, '');
 }
 
+/**
+ * Check if a label can produce empty strings (for validation).
+ * A label is invalid if all elements are optional or can produce empty.
+ */
+function canProduceEmpty(elements: ElementNode[]): boolean {
+  return elements.every(el => {
+    if (el.optional) return true;
+    const p = el.primary;
+    if (p.type === 'charclass' && p.repetitionMin === 0) return true;
+    if (p.type === 'group') return canProduceEmpty(p.elements);
+    if (p.type === 'alternation') {
+      return p.options.every(opt => canProduceEmpty(opt));
+    }
+    return false;
+  });
+}
+
 export function parse(input: string): DomainNode {
-  // Section 4.3: normalise to lowercase
+  // Section 5.3: normalise to lowercase
   const src = input.toLowerCase();
 
   if (src.length === 0) {
     throw new ParseError('Empty expression', 0);
+  }
+
+  // Check for whitespace (Section 5.4)
+  if (/\s/.test(src)) {
+    const pos = src.search(/\s/);
+    throw new ParseError('Whitespace is not permitted', pos);
   }
 
   let pos = 0;
@@ -112,28 +137,63 @@ export function parse(input: string): DomainNode {
     return { type: 'domain', labels };
   }
 
-  /** label = element, { element } ; */
+  /** label = sequence ; */
   function parseLabel(): LabelNode {
-    const elements: ElementNode[] = [];
+    const startPos = pos;
 
     // Must have at least one element
     if (pos >= src.length || peek() === '.') {
       throw new ParseError('Empty label', pos);
     }
 
-    while (pos < src.length && peek() !== '.') {
-      elements.push(parseElement());
-    }
+    const elements = parseSequence();
 
     if (elements.length === 0) {
-      throw new ParseError('Empty label', pos);
+      throw new ParseError('Empty label', startPos);
+    }
+
+    // Section 8: Label validity - must produce at least one character
+    if (canProduceEmpty(elements)) {
+      throw new ParseError(
+        'Label must produce at least one character in every expansion branch',
+        startPos,
+      );
     }
 
     return { type: 'label', elements };
   }
 
-  /** element = literal | char_class, repetition | alternation ; */
+  /** sequence = element, { element } ; */
+  function parseSequence(): ElementNode[] {
+    const elements: ElementNode[] = [];
+
+    while (pos < src.length) {
+      const ch = peek()!;
+      // Stop at sequence terminators
+      if (ch === '.' || ch === ',' || ch === ')' || ch === '}') {
+        break;
+      }
+      elements.push(parseElement());
+    }
+
+    return elements;
+  }
+
+  /** element = primary, [ "?" ] ; */
   function parseElement(): ElementNode {
+    const primary = parsePrimary();
+    let optional = false;
+
+    if (peek() === '?') {
+      advance(); // consume '?'
+      optional = true;
+    }
+
+    return { primary, optional };
+  }
+
+  /** primary = literal | char_class, repetition | alternation | group ; */
+  function parsePrimary(): PrimaryNode {
     const ch = peek();
 
     if (ch === '[') {
@@ -142,6 +202,10 @@ export function parse(input: string): DomainNode {
 
     if (ch === '{') {
       return parseAlternation();
+    }
+
+    if (ch === '(') {
+      return parseGroup();
     }
 
     if (ch !== undefined && isLiteralChar(ch)) {
@@ -175,22 +239,45 @@ export function parse(input: string): DomainNode {
     return { type: 'literal', value };
   }
 
+  /** group = "(", sequence, ")" ; */
+  function parseGroup(): GroupNode {
+    const start = pos;
+    expect('(');
+
+    const elements = parseSequence();
+
+    if (elements.length === 0) {
+      throw new ParseError('Empty group', start);
+    }
+
+    expect(')');
+
+    return { type: 'group', elements };
+  }
+
   /**
-   * alternation = "{", alt_item, { ",", alt_item }, "}" ;
-   * alt_item    = literal ;
+   * alternation = "{", sequence, { ",", sequence }, "}" ;
    */
   function parseAlternation(): AlternationNode {
     const start = pos;
     expect('{');
 
-    const options: string[] = [];
+    const options: ElementNode[][] = [];
 
-    // Parse first alt_item
-    options.push(parseAltItem());
+    // Parse first sequence
+    const firstSeq = parseSequence();
+    if (firstSeq.length === 0) {
+      throw new ParseError('Empty alternation item', pos);
+    }
+    options.push(firstSeq);
 
     while (peek() === ',') {
       advance(); // consume ','
-      options.push(parseAltItem());
+      const seq = parseSequence();
+      if (seq.length === 0) {
+        throw new ParseError('Empty alternation item', pos);
+      }
+      options.push(seq);
     }
 
     expect('}');
@@ -205,28 +292,11 @@ export function parse(input: string): DomainNode {
     return { type: 'alternation', options };
   }
 
-  /** alt_item = literal ; (returns just the string value) */
-  function parseAltItem(): string {
-    let value = '';
-    while (pos < src.length) {
-      const ch = peek()!;
-      if (isLiteralChar(ch)) {
-        value += advance();
-      } else {
-        break;
-      }
-    }
-    if (value.length === 0) {
-      throw new ParseError('Empty alternation item', pos);
-    }
-    return value;
-  }
-
   /**
    * char_class  = "[", class_item, { class_item }, "]" ;
    * class_item  = letter | digit | letter, "-", letter | digit, "-", digit ;
    * (followed by)
-   * repetition  = "{", number, "}" ;
+   * repetition  = "{", number, "}" | "{", number, ",", number, "}" ;
    */
   function parseCharClass(): CharClassNode {
     const start = pos;
@@ -275,38 +345,63 @@ export function parse(input: string): DomainNode {
 
     expect(']');
 
-    // Now parse repetition: {n}
+    // Now parse repetition: {n} or {min,max}
     if (peek() !== '{') {
       throw new ParseError(
-        'Character class must be followed by a repetition like {3}',
+        'Character class must be followed by a repetition like {3} or {2,5}',
         pos,
       );
     }
 
     expect('{');
     let numStr = '';
-    while (pos < src.length && peek() !== '}') {
+    while (pos < src.length && peek() !== '}' && peek() !== ',') {
       const ch = advance();
       if (!isDigit(ch)) {
         throw new ParseError(`Expected digit in repetition, got '${ch}'`, pos - 1);
       }
       numStr += ch;
     }
-    expect('}');
 
     if (numStr.length === 0) {
       throw new ParseError('Empty repetition count', pos);
     }
 
-    const repetition = parseInt(numStr, 10);
-    if (repetition === 0) {
-      throw new ParseError('Repetition count must be at least 1', pos);
+    let repetitionMin = parseInt(numStr, 10);
+    let repetitionMax = repetitionMin;
+
+    // Check for range: {min,max}
+    if (peek() === ',') {
+      advance(); // consume ','
+      let maxStr = '';
+      while (pos < src.length && peek() !== '}') {
+        const ch = advance();
+        if (!isDigit(ch)) {
+          throw new ParseError(`Expected digit in repetition max, got '${ch}'`, pos - 1);
+        }
+        maxStr += ch;
+      }
+      if (maxStr.length === 0) {
+        throw new ParseError('Empty repetition max (open-ended ranges not supported)', pos);
+      }
+      repetitionMax = parseInt(maxStr, 10);
+    }
+
+    expect('}');
+
+    // Validate: 0 <= min <= max
+    if (repetitionMin > repetitionMax) {
+      throw new ParseError(
+        `Invalid repetition range: min (${repetitionMin}) > max (${repetitionMax})`,
+        start,
+      );
     }
 
     return {
       type: 'charclass',
       chars: Array.from(charSet).sort(),
-      repetition,
+      repetitionMin,
+      repetitionMax,
     };
   }
 

@@ -22,7 +22,7 @@
         <label for="expression">Expression</label>
         <textarea
           id="expression"
-          placeholder="{app,api,www}.example.com"
+          placeholder="car(s)?.{com,net}"
           spellcheck="false"
         ></textarea>
         <div class="buttons">
@@ -58,18 +58,38 @@
         </div>
         <div class="syntax-item">
           <h3>Character Classes</h3>
-          <p>Ranges with fixed repetition count</p>
+          <p>Ranges with repetition count or range</p>
           <code>[a-z]{3}</code>
-          <code>[0-9]{2}</code>
+          <code>[a-z]{2,4}</code>
           <code>[a-z0-9]{4}</code>
+        </div>
+        <div class="syntax-item">
+          <h3>Grouping</h3>
+          <p>Group elements together</p>
+          <code>(abc)</code>
+          <code>(smart{car,bike})</code>
+        </div>
+        <div class="syntax-item">
+          <h3>Optional</h3>
+          <p>Make a group or element optional with ?</p>
+          <code>car(s)?</code>
+          <code>(-v[0-9]{1})?</code>
+        </div>
+        <div class="syntax-item">
+          <h3>Nesting</h3>
+          <p>Combine patterns in alternations</p>
+          <code>{smart{car,bike},fast}</code>
+          <code>{[a-z]{3},foo}</code>
         </div>
       </div>
 
       <h3>Examples</h3>
       <ul class="examples">
         <li><code>{app,api}.example.com</code> &rarr; app.example.com, api.example.com</li>
-        <li><code>www.{google,apple}.{com,net}</code> &rarr; 4 domains</li>
-        <li><code>[a-z]{2}.io</code> &rarr; 676 domains (aa.io through zz.io)</li>
+        <li><code>car(s)?.com</code> &rarr; car.com, cars.com</li>
+        <li><code>[a-z]{2,3}.io</code> &rarr; 18,252 domains (2 and 3 letter)</li>
+        <li><code>{smart{car,bike},fast{boat,plane}}.com</code> &rarr; 4 domains</li>
+        <li><code>{api,dev}(-v[0-9]{1})?.{ai,io}</code> &rarr; 44 domains</li>
       </ul>
     </section>
   </div>

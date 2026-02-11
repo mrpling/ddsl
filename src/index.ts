@@ -1,5 +1,5 @@
 /**
- * DDSL v0.1 — Reference Implementation
+ * DDSL v0.2 — Reference Implementation
  *
  * A declarative language for describing sets of domain names
  * using structural patterns.
@@ -16,9 +16,11 @@ export type {
   DomainNode,
   LabelNode,
   ElementNode,
+  PrimaryNode,
   LiteralNode,
   CharClassNode,
   AlternationNode,
+  GroupNode,
 } from './types';
 
 export { parse, prepare, ParseError } from './parser';
@@ -28,7 +30,7 @@ export type { ExpandOptions, PreviewResult } from './expander';
 /**
  * Parse and expand a DDSL expression in one step.
  *
- * @param expression - A valid DDSL v0.1 expression
+ * @param expression - A valid DDSL v0.2 expression
  * @param options - Expansion options (e.g. maxExpansion limit)
  * @returns Array of domain name strings
  *
@@ -39,8 +41,11 @@ export type { ExpandOptions, PreviewResult } from './expander';
  * ddsl('{car,bike}.com');
  * // ['car.com', 'bike.com']
  *
- * ddsl('{fast,smart}{car,bike}.com');
- * // ['fastcar.com', 'fastbike.com', 'smartcar.com', 'smartbike.com']
+ * ddsl('car(s)?.com');
+ * // ['car.com', 'cars.com']
+ *
+ * ddsl('[a-z]{2,3}.ai');
+ * // All 2 and 3 letter .ai domains
  * ```
  */
 export function ddsl(expression: string, options?: ExpandOptions): string[] {

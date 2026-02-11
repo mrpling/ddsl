@@ -1,12 +1,12 @@
 /**
- * DDSL v0.1 — Expander
+ * DDSL v0.2 — Expander
  *
  * Takes a parsed DDSL AST and expands it into the complete finite set
- * of domain names. Implements the semantics from Section 8 of the
+ * of domain names. Implements the semantics from Section 9 of the
  * specification.
  */
 
-import type { DomainNode, LabelNode, ElementNode } from './types';
+import type { DomainNode, LabelNode, ElementNode, PrimaryNode } from './types';
 
 export class ExpansionError extends Error {
   constructor(message: string) {
@@ -57,22 +57,14 @@ export function expansionSize(ast: DomainNode): number {
   return total;
 }
 
-function uniqueStrings(values: string[]): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const value of values) {
-    if (!seen.has(value)) {
-      seen.add(value);
-      result.push(value);
-    }
-  }
-  return result;
+function labelExpansionSize(label: LabelNode): number {
+  return sequenceExpansionSize(label.elements);
 }
 
-function labelExpansionSize(label: LabelNode): number {
+function sequenceExpansionSize(elements: ElementNode[]): number {
   let size = 1;
 
-  for (const element of label.elements) {
+  for (const element of elements) {
     size *= elementExpansionSize(element);
 
     if (!Number.isFinite(size) || size > Number.MAX_SAFE_INTEGER) {
@@ -84,20 +76,56 @@ function labelExpansionSize(label: LabelNode): number {
 }
 
 function elementExpansionSize(element: ElementNode): number {
-  switch (element.type) {
+  const primarySize = primaryExpansionSize(element.primary);
+
+  if (element.optional) {
+    // Optional adds one more branch (the empty case)
+    // But we need to count unique outputs, so it's primarySize + 1
+    // unless primary can produce empty, in which case it's just primarySize
+    return primarySize + 1;
+  }
+
+  return primarySize;
+}
+
+function primaryExpansionSize(primary: PrimaryNode): number {
+  switch (primary.type) {
     case 'literal':
       return 1;
-    case 'alternation':
-      return uniqueStrings(element.options).length;
-    case 'charclass':
-      return Math.pow(element.chars.length, element.repetition);
+
+    case 'alternation': {
+      // Sum of all option sizes (each option is a sequence)
+      let total = 0;
+      for (const option of primary.options) {
+        total += sequenceExpansionSize(option);
+        if (!Number.isFinite(total) || total > Number.MAX_SAFE_INTEGER) {
+          return Infinity;
+        }
+      }
+      return total;
+    }
+
+    case 'charclass': {
+      // Sum of sizes for each repetition count from min to max
+      let total = 0;
+      for (let r = primary.repetitionMin; r <= primary.repetitionMax; r++) {
+        total += Math.pow(primary.chars.length, r);
+        if (!Number.isFinite(total) || total > Number.MAX_SAFE_INTEGER) {
+          return Infinity;
+        }
+      }
+      return total;
+    }
+
+    case 'group':
+      return sequenceExpansionSize(primary.elements);
   }
 }
 
 /**
  * Expand a parsed DDSL AST into the full set of domain names.
  *
- * Section 8.4: All output domain names are lowercase, use '.' as the
+ * Section 9.4: All output domain names are lowercase, use '.' as the
  * label separator, and do not contain a trailing dot.
  *
  * Throws ExpansionError if the expansion would exceed maxExpansion.
@@ -146,11 +174,16 @@ export function preview(ast: DomainNode, limit: number): PreviewResult {
 
 /**
  * Expand a label into all possible string values.
- * A label's elements are concatenated, so we need the Cartesian product
- * of all elements within the label, then join each combination.
  */
 function expandLabel(label: LabelNode): string[] {
-  const elementSets = label.elements.map(expandElement);
+  return expandSequence(label.elements);
+}
+
+/**
+ * Expand a sequence of elements into all possible string values.
+ */
+function expandSequence(elements: ElementNode[]): string[] {
+  const elementSets = elements.map(expandElement);
   return cartesianProduct(elementSets).map(parts => parts.join(''));
 }
 
@@ -158,23 +191,66 @@ function expandLabel(label: LabelNode): string[] {
  * Expand a single element into its set of possible string values.
  */
 function expandElement(element: ElementNode): string[] {
-  switch (element.type) {
-    case 'literal':
-      return [element.value];
+  const primaryStrings = expandPrimary(element.primary);
 
-    case 'alternation':
-      return uniqueStrings(element.options);
+  if (element.optional) {
+    // Add empty string option for optional elements
+    const result = ['', ...primaryStrings];
+    // Deduplicate in case primary already produces empty
+    return [...new Set(result)];
+  }
+
+  return primaryStrings;
+}
+
+/**
+ * Expand a primary node into its set of possible string values.
+ */
+function expandPrimary(primary: PrimaryNode): string[] {
+  switch (primary.type) {
+    case 'literal':
+      return [primary.value];
+
+    case 'alternation': {
+      // Expand each option (sequence) and combine
+      const results: string[] = [];
+      for (const option of primary.options) {
+        results.push(...expandSequence(option));
+      }
+      // Deduplicate
+      return [...new Set(results)];
+    }
 
     case 'charclass':
-      return expandCharClass(element.chars, element.repetition);
+      return expandCharClass(primary.chars, primary.repetitionMin, primary.repetitionMax);
+
+    case 'group':
+      return expandSequence(primary.elements);
   }
 }
 
 /**
- * Expand a character class with repetition into all combinations.
- * e.g. chars=['a','b'], repetition=2 → ['aa','ab','ba','bb']
+ * Expand a character class with repetition range into all combinations.
+ * e.g. chars=['a','b'], min=1, max=2 → ['a','b','aa','ab','ba','bb']
  */
-function expandCharClass(chars: string[], repetition: number): string[] {
+function expandCharClass(chars: string[], min: number, max: number): string[] {
+  const results: string[] = [];
+
+  for (let rep = min; rep <= max; rep++) {
+    if (rep === 0) {
+      results.push('');
+    } else {
+      results.push(...expandCharClassFixed(chars, rep));
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Expand a character class with fixed repetition.
+ */
+function expandCharClassFixed(chars: string[], repetition: number): string[] {
   if (repetition === 0) return [''];
 
   let results = chars.map(c => c);
@@ -221,7 +297,6 @@ function cartesianProductCapped(sets: string[][], limit: number): string[][] {
 
   let result: string[][] = [[]];
 
-  //allow each set to finish but cap to results for each set
   for (const set of sets) {
     const next: string[][] = [];
     outer: for (const existing of result) {
