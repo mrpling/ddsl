@@ -1,9 +1,23 @@
 /**
- * DDSL v0.2 — AST Node Types
+ * DDSL v0.3 — AST Node Types
  *
  * These types mirror the formal grammar defined in Section 7
- * of the DDSL v0.2 specification.
+ * of the DDSL v0.3 specification.
  */
+
+/** A complete DDSL document with variable definitions and expressions. */
+export interface DocumentNode {
+  type: 'document';
+  variables: VariableDefNode[];
+  expressions: DomainNode[];
+}
+
+/** A variable definition: @name = sequence */
+export interface VariableDefNode {
+  type: 'vardef';
+  name: string;
+  elements: ElementNode[];
+}
 
 /** A complete DDSL expression: one or more labels separated by dots. */
 export interface DomainNode {
@@ -27,7 +41,7 @@ export interface ElementNode {
 }
 
 /** A primary element (before optional ? is applied). */
-export type PrimaryNode = LiteralNode | CharClassNode | AlternationNode | GroupNode;
+export type PrimaryNode = LiteralNode | CharClassNode | AlternationNode | GroupNode | VarRefNode;
 
 /** A fixed string of literal characters. */
 export interface LiteralNode {
@@ -36,12 +50,13 @@ export interface LiteralNode {
 }
 
 /**
- * A character class with repetition, e.g. [a-z]{3} or [a-z]{3,5}
- * repetition = "{", number, "}" | "{", number, ",", number, "}" ;
+ * A character class with optional negation and repetition.
+ * Supports named classes [:v:] and [:c:] and negation [^...]
  */
 export interface CharClassNode {
   type: 'charclass';
   chars: string[];           // expanded list of individual characters
+  negated: boolean;          // true if [^...]
   repetitionMin: number;
   repetitionMax: number;
 }
@@ -56,10 +71,20 @@ export interface AlternationNode {
 }
 
 /**
- * A group containing a sequence, e.g. (abc) or (smart{car,bike})
- * group = "(", sequence, ")" ;
+ * A group containing a sequence with optional repetition.
+ * group = "(", sequence, ")", [ repetition ] ;
  */
 export interface GroupNode {
   type: 'group';
   elements: ElementNode[];
+  repetitionMin: number;
+  repetitionMax: number;
+}
+
+/**
+ * A variable reference: @name
+ */
+export interface VarRefNode {
+  type: 'varref';
+  name: string;
 }

@@ -22,7 +22,8 @@
         <label for="expression">Expression</label>
         <textarea
           id="expression"
-          placeholder="car(s)?.{com,net}"
+          placeholder="@tlds = {com,net}
+example.@tlds"
           spellcheck="false"
         ></textarea>
         <div class="buttons">
@@ -37,7 +38,8 @@
           <span id="count">Enter an expression to expand</span>
           <button id="copy-btn" class="btn btn-small" hidden>Copy</button>
         </div>
-        <textarea id="results" class="results-textarea" readonly placeholder="Results will appear here"></textarea>
+        <textarea id="results" class="results-textarea" placeholder="Results will appear here"></textarea>
+        <div id="line-status" class="line-status"></div>
       </div>
     </main>
 
@@ -58,22 +60,35 @@
         </div>
         <div class="syntax-item">
           <h3>Character Classes</h3>
-          <p>Ranges with repetition count or range</p>
+          <p>Ranges with optional repetition</p>
+          <code>[a-z]</code>
           <code>[a-z]{3}</code>
           <code>[a-z]{2,4}</code>
-          <code>[a-z0-9]{4}</code>
+        </div>
+        <div class="syntax-item">
+          <h3>Negated Classes</h3>
+          <p>Exclude characters with ^</p>
+          <code>[^aeiou]{3}</code>
+          <code>[^0-9]{2}</code>
+        </div>
+        <div class="syntax-item">
+          <h3>Named Classes</h3>
+          <p>[:v:] vowels, [:c:] consonants</p>
+          <code>[[:v:]]</code>
+          <code>[[:c:]]{3}</code>
+          <code>[[:c:]0-9]{2}</code>
         </div>
         <div class="syntax-item">
           <h3>Grouping</h3>
-          <p>Group elements together</p>
+          <p>Group elements, with optional repetition</p>
           <code>(abc)</code>
-          <code>(smart{car,bike})</code>
+          <code>(ab){2,3}</code>
         </div>
         <div class="syntax-item">
           <h3>Optional</h3>
           <p>Make a group or element optional with ?</p>
           <code>car(s)?</code>
-          <code>(-v[0-9]{1})?</code>
+          <code>(-v[0-9])?</code>
         </div>
         <div class="syntax-item">
           <h3>Nesting</h3>
@@ -81,16 +96,35 @@
           <code>{smart{car,bike},fast}</code>
           <code>{[a-z]{3},foo}</code>
         </div>
+        <div class="syntax-item">
+          <h3>Variables</h3>
+          <p>Define and reuse patterns</p>
+          <code>@tlds = {com,net}</code>
+          <code>example.@tlds</code>
+        </div>
+        <div class="syntax-item">
+          <h3>Comments</h3>
+          <p>Add notes with #</p>
+          <code># API domains</code>
+          <code>api.com # main</code>
+        </div>
       </div>
 
       <h3>Examples</h3>
       <ul class="examples">
         <li><code>{app,api}.example.com</code> &rarr; app.example.com, api.example.com</li>
         <li><code>car(s)?.com</code> &rarr; car.com, cars.com</li>
-        <li><code>[a-z]{2,3}.io</code> &rarr; 18,252 domains (2 and 3 letter)</li>
-        <li><code>{smart{car,bike},fast{boat,plane}}.com</code> &rarr; 4 domains</li>
-        <li><code>{api,dev}(-v[0-9]{1})?.{ai,io}</code> &rarr; 44 domains</li>
+        <li><code>[^aeiou]{3}.com</code> &rarr; 29,791 domains (consonants + digits)</li>
+        <li><code>[[:c:]][[:v:]][[:c:]].ai</code> &rarr; 2,205 CVC domains</li>
+        <li><code>(ab){2,3}.com</code> &rarr; abab.com, ababab.com</li>
       </ul>
+
+      <h3>Multi-line Example</h3>
+      <pre class="example-block">@tlds = {com,net,org}
+@env = {dev,prod}
+
+# API endpoints
+api.@env.example.@tlds</pre>
     </section>
   </div>
 

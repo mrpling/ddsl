@@ -1,12 +1,19 @@
 /**
- * DDSL v0.2 — Expander
+ * DDSL v0.3 — Expander
  *
  * Takes a parsed DDSL AST and expands it into the complete finite set
- * of domain names. Implements the semantics from Section 9 of the
+ * of domain names. Implements the semantics from Section 10 of the
  * specification.
  */
 
-import type { DomainNode, LabelNode, ElementNode, PrimaryNode } from './types';
+import type {
+  DocumentNode,
+  DomainNode,
+  LabelNode,
+  ElementNode,
+  PrimaryNode,
+  VariableDefNode,
+} from './types';
 
 export class ExpansionError extends Error {
   constructor(message: string) {
@@ -37,9 +44,28 @@ export interface PreviewResult {
   truncated: boolean;
 }
 
+// Variable storage for expansion
+let variableMap: Map<string, ElementNode[]> = new Map();
+
+/**
+ * Set variables for expansion (called before expanding expressions).
+ */
+export function setVariables(variables: VariableDefNode[]): void {
+  variableMap = new Map();
+  for (const v of variables) {
+    variableMap.set(v.name, v.elements);
+  }
+}
+
+/**
+ * Clear variables after expansion.
+ */
+export function clearVariables(): void {
+  variableMap = new Map();
+}
+
 /**
  * Calculate the total expansion size without actually expanding.
- * Useful for checking limits before committing to expansion.
  */
 export function expansionSize(ast: DomainNode): number {
   let total = 1;
@@ -48,7 +74,36 @@ export function expansionSize(ast: DomainNode): number {
     const labelSize = labelExpansionSize(label);
     total *= labelSize;
 
-    // Guard against overflow
+    if (!Number.isFinite(total) || total > Number.MAX_SAFE_INTEGER) {
+      return Infinity;
+    }
+  }
+
+  return total;
+}
+
+/**
+ * Calculate expansion size for a document (sum of all expressions).
+ */
+export function documentExpansionSize(doc: DocumentNode): number {
+  setVariables(doc.variables);
+  try {
+    return calcDocumentSize(doc);
+  } finally {
+    clearVariables();
+  }
+}
+
+/**
+ * Internal helper to calculate document size (assumes variables are already set).
+ */
+function calcDocumentSize(doc: DocumentNode): number {
+  let total = 0;
+
+  for (const expr of doc.expressions) {
+    const size = expansionSize(expr);
+    total += size;
+
     if (!Number.isFinite(total) || total > Number.MAX_SAFE_INTEGER) {
       return Infinity;
     }
@@ -79,9 +134,6 @@ function elementExpansionSize(element: ElementNode): number {
   const primarySize = primaryExpansionSize(element.primary);
 
   if (element.optional) {
-    // Optional adds one more branch (the empty case)
-    // But we need to count unique outputs, so it's primarySize + 1
-    // unless primary can produce empty, in which case it's just primarySize
     return primarySize + 1;
   }
 
@@ -94,7 +146,6 @@ function primaryExpansionSize(primary: PrimaryNode): number {
       return 1;
 
     case 'alternation': {
-      // Sum of all option sizes (each option is a sequence)
       let total = 0;
       for (const option of primary.options) {
         total += sequenceExpansionSize(option);
@@ -106,7 +157,6 @@ function primaryExpansionSize(primary: PrimaryNode): number {
     }
 
     case 'charclass': {
-      // Sum of sizes for each repetition count from min to max
       let total = 0;
       for (let r = primary.repetitionMin; r <= primary.repetitionMax; r++) {
         total += Math.pow(primary.chars.length, r);
@@ -117,23 +167,34 @@ function primaryExpansionSize(primary: PrimaryNode): number {
       return total;
     }
 
-    case 'group':
-      return sequenceExpansionSize(primary.elements);
+    case 'group': {
+      const innerSize = sequenceExpansionSize(primary.elements);
+      let total = 0;
+      for (let r = primary.repetitionMin; r <= primary.repetitionMax; r++) {
+        total += Math.pow(innerSize, r);
+        if (!Number.isFinite(total) || total > Number.MAX_SAFE_INTEGER) {
+          return Infinity;
+        }
+      }
+      return total;
+    }
+
+    case 'varref': {
+      const varElements = variableMap.get(primary.name);
+      if (!varElements) {
+        return 0;
+      }
+      return sequenceExpansionSize(varElements);
+    }
   }
 }
 
 /**
  * Expand a parsed DDSL AST into the full set of domain names.
- *
- * Section 9.4: All output domain names are lowercase, use '.' as the
- * label separator, and do not contain a trailing dot.
- *
- * Throws ExpansionError if the expansion would exceed maxExpansion.
  */
 export function expand(ast: DomainNode, options?: ExpandOptions): string[] {
   const maxExpansion = options?.maxExpansion ?? DEFAULT_MAX_EXPANSION;
 
-  // Check expansion size before expanding
   if (maxExpansion > 0 && maxExpansion !== Infinity) {
     const size = expansionSize(ast);
     if (size > maxExpansion) {
@@ -144,80 +205,140 @@ export function expand(ast: DomainNode, options?: ExpandOptions): string[] {
     }
   }
 
-  // Expand each label into its set of possible strings
   const labelSets = ast.labels.map(expandLabel);
-
-  // Cartesian product across labels with deduplication, joined by '.'
   return [...new Set(cartesianProduct(labelSets).map(parts => parts.join('.')))];
 }
 
 /**
- * Preview an expansion with a capped result set.
- * Unlike expand(), this never throws on large expressions - it simply
- * truncates the results and indicates truncation in the response.
- *
- * Use this for UI previews where you want to show a sample of results
- * without risking errors on large expressions.
+ * Expand a DDSL document into the full set of domain names.
  */
-export function preview(ast: DomainNode, limit: number): PreviewResult {
+export function expandDocument(doc: DocumentNode, options?: ExpandOptions): string[] {
+  const maxExpansion = options?.maxExpansion ?? DEFAULT_MAX_EXPANSION;
+
+  setVariables(doc.variables);
+
+  try {
+    if (maxExpansion > 0 && maxExpansion !== Infinity) {
+      const size = calcDocumentSize(doc);
+      if (size > maxExpansion) {
+        throw new ExpansionError(
+          `Document would expand to ${size.toLocaleString()} domains, ` +
+          `which exceeds the limit of ${maxExpansion.toLocaleString()}`,
+        );
+      }
+    }
+
+    const allDomains: Set<string> = new Set();
+
+    for (const expr of doc.expressions) {
+      const domains = expand(expr, { maxExpansion: Infinity });
+      for (const d of domains) {
+        allDomains.add(d);
+      }
+    }
+
+    return [...allDomains];
+  } finally {
+    clearVariables();
+  }
+}
+
+/**
+ * Preview an expansion with a capped result set.
+ * Throws ExpansionError if total expansion size exceeds maxExpansion.
+ */
+export function preview(ast: DomainNode, limit: number, options?: ExpandOptions): PreviewResult {
+  const maxExpansion = options?.maxExpansion ?? DEFAULT_MAX_EXPANSION;
   const total = expansionSize(ast);
+
+  if (maxExpansion > 0 && maxExpansion !== Infinity && total > maxExpansion) {
+    throw new ExpansionError(
+      `Expression would expand to ${total.toLocaleString()} domains, ` +
+      `which exceeds the limit of ${maxExpansion.toLocaleString()}`,
+    );
+  }
+
   const truncated = total > limit;
-
-  // Expand each label into its set of possible strings
   const labelSets = ast.labels.map(expandLabel);
-
-  // Cartesian product with cap
   const domains = [...new Set(cartesianProductCapped(labelSets, limit).map(parts => parts.join('.')))];
 
   return { domains, total, truncated };
 }
 
 /**
- * Expand a label into all possible string values.
+ * Preview a document expansion with a capped result set.
+ * Throws ExpansionError if total expansion size exceeds maxExpansion.
  */
+export function previewDocument(doc: DocumentNode, limit: number, options?: ExpandOptions): PreviewResult {
+  const maxExpansion = options?.maxExpansion ?? DEFAULT_MAX_EXPANSION;
+
+  setVariables(doc.variables);
+
+  try {
+    const total = calcDocumentSize(doc);
+
+    if (maxExpansion > 0 && maxExpansion !== Infinity && total > maxExpansion) {
+      throw new ExpansionError(
+        `Document would expand to ${total.toLocaleString()} domains, ` +
+        `which exceeds the limit of ${maxExpansion.toLocaleString()}`,
+      );
+    }
+
+    const truncated = total > limit;
+    const allDomains: string[] = [];
+    let remaining = limit;
+
+    for (const expr of doc.expressions) {
+      if (remaining <= 0) break;
+
+      // Pass Infinity to inner preview since we already checked total
+      const result = preview(expr, remaining, { maxExpansion: Infinity });
+      for (const s of result.domains) {
+        allDomains.push(s);
+      }
+      remaining -= result.domains.length;
+    }
+
+    return {
+      domains: [...new Set(allDomains)].slice(0, limit),
+      total,
+      truncated,
+    };
+  } finally {
+    clearVariables();
+  }
+}
+
 function expandLabel(label: LabelNode): string[] {
   return expandSequence(label.elements);
 }
 
-/**
- * Expand a sequence of elements into all possible string values.
- */
 function expandSequence(elements: ElementNode[]): string[] {
   const elementSets = elements.map(expandElement);
   return cartesianProduct(elementSets).map(parts => parts.join(''));
 }
 
-/**
- * Expand a single element into its set of possible string values.
- */
 function expandElement(element: ElementNode): string[] {
   const primaryStrings = expandPrimary(element.primary);
 
   if (element.optional) {
-    // Add empty string option for optional elements
     const result = ['', ...primaryStrings];
-    // Deduplicate in case primary already produces empty
     return [...new Set(result)];
   }
 
   return primaryStrings;
 }
 
-/**
- * Expand a primary node into its set of possible string values.
- */
 function expandPrimary(primary: PrimaryNode): string[] {
   switch (primary.type) {
     case 'literal':
       return [primary.value];
 
     case 'alternation': {
-      // Expand each option (sequence) and combine
       const results: string[] = [];
       for (const option of primary.options) {
         results.push(...expandSequence(option));
       }
-      // Deduplicate
       return [...new Set(results)];
     }
 
@@ -225,31 +346,32 @@ function expandPrimary(primary: PrimaryNode): string[] {
       return expandCharClass(primary.chars, primary.repetitionMin, primary.repetitionMax);
 
     case 'group':
-      return expandSequence(primary.elements);
+      return expandGroup(primary.elements, primary.repetitionMin, primary.repetitionMax);
+
+    case 'varref': {
+      const varElements = variableMap.get(primary.name);
+      if (!varElements) {
+        return [];
+      }
+      return expandSequence(varElements);
+    }
   }
 }
 
-/**
- * Expand a character class with repetition range into all combinations.
- * e.g. chars=['a','b'], min=1, max=2 → ['a','b','aa','ab','ba','bb']
- */
 function expandCharClass(chars: string[], min: number, max: number): string[] {
-  const results: string[] = [];
+  let results: string[] = [];
 
   for (let rep = min; rep <= max; rep++) {
     if (rep === 0) {
       results.push('');
     } else {
-      results.push(...expandCharClassFixed(chars, rep));
+      results = results.concat(expandCharClassFixed(chars, rep));
     }
   }
 
   return results;
 }
 
-/**
- * Expand a character class with fixed repetition.
- */
 function expandCharClassFixed(chars: string[], repetition: number): string[] {
   if (repetition === 0) return [''];
 
@@ -266,10 +388,41 @@ function expandCharClassFixed(chars: string[], repetition: number): string[] {
   return results;
 }
 
-/**
- * Compute the Cartesian product of an array of string arrays.
- * e.g. [['a','b'], ['1','2']] → [['a','1'], ['a','2'], ['b','1'], ['b','2']]
- */
+function expandGroup(elements: ElementNode[], min: number, max: number): string[] {
+  const innerStrings = expandSequence(elements);
+  const results: string[] = [];
+
+  for (let rep = min; rep <= max; rep++) {
+    if (rep === 0) {
+      results.push('');
+    } else {
+      const expanded = expandGroupFixed(innerStrings, rep);
+      for (const s of expanded) {
+        results.push(s);
+      }      
+    }
+  }
+
+  return results;
+}
+
+function expandGroupFixed(strings: string[], repetition: number): string[] {
+  if (repetition === 0) return [''];
+  if (repetition === 1) return strings;
+
+  let results = [...strings];
+  for (let i = 1; i < repetition; i++) {
+    const next: string[] = [];
+    for (const existing of results) {
+      for (const s of strings) {
+        next.push(existing + s);
+      }
+    }
+    results = next;
+  }
+  return results;
+}
+
 function cartesianProduct(sets: string[][]): string[][] {
   if (sets.length === 0) return [[]];
 
@@ -288,10 +441,6 @@ function cartesianProduct(sets: string[][]): string[][] {
   return result;
 }
 
-/**
- * Compute the Cartesian product with an optional cap on results.
- * Stops early once the limit is reached.
- */
 function cartesianProductCapped(sets: string[][], limit: number): string[][] {
   if (sets.length === 0) return [[]];
 

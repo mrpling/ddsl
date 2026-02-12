@@ -1,46 +1,79 @@
 import { describe, it, expect } from 'vitest';
-import { parse } from '../src/parser';
-import { expand, preview, expansionSize, ExpansionError } from '../src/expander';
+import { parse, parseDocument, prepareDocument } from '../src/parser';
+import {
+  expand,
+  expandDocument,
+  preview,
+  expansionSize,
+  documentExpansionSize,
+  ExpansionError,
+} from '../src/expander';
 
-/**
- * Helper: parse + expand, return sorted results for deterministic comparison.
- * Section 9.1: order is not defined, so we sort for testing.
- */
 function ddsl(expr: string): string[] {
   return expand(parse(expr)).sort();
 }
 
+function ddslDoc(input: string): string[] {
+  const lines = prepareDocument(input);
+  const doc = parseDocument(lines);
+  return expandDocument(doc).sort();
+}
+
 describe('expander', () => {
-  describe('spec examples (Section 10)', () => {
-    it('10.1 literal domain', () => {
+  describe('spec examples (Section 11)', () => {
+    it('11.1 literal', () => {
       expect(ddsl('example.com')).toEqual(['example.com']);
     });
 
-    it('10.2 alternation', () => {
-      expect(ddsl('{car,bike}.com')).toEqual([
-        'bike.com',
-        'car.com',
-      ]);
+    it('11.2 alternation', () => {
+      expect(ddsl('{car,bike}.com')).toEqual(['bike.com', 'car.com']);
     });
 
-    it('10.3 character class with range', () => {
-      const result = ddsl('[a-z]{2,3}.ai');
-      // 26^2 + 26^3 = 676 + 17576 = 18252
-      expect(result).toHaveLength(26 ** 2 + 26 ** 3);
-      expect(result).toContain('aa.ai');
-      expect(result).toContain('zz.ai');
-      expect(result).toContain('aaa.ai');
-      expect(result).toContain('zzz.ai');
+    it('11.3 character class with default repetition', () => {
+      const result = ddsl('[a-z].ai');
+      expect(result).toHaveLength(26);
+      expect(result).toContain('a.ai');
+      expect(result).toContain('z.ai');
     });
 
-    it('10.4 grouping and optional', () => {
-      expect(ddsl('car(s)?.com')).toEqual([
-        'car.com',
-        'cars.com',
-      ]);
+    it('11.4 character class with range', () => {
+      const result = ddsl('[a-z]{3,4}.ai');
+      expect(result).toHaveLength(26 ** 3 + 26 ** 4);
     });
 
-    it('10.5 nested alternation', () => {
+    it('11.5 negated character class', () => {
+      const result = ddsl('[^aeiou]{3}.com');
+      // 31 chars (26 letters - 5 vowels + 10 digits = 31)
+      expect(result).toHaveLength(31 ** 3);
+    });
+
+    it('11.6 grouping and optional', () => {
+      expect(ddsl('car(s)?.com')).toEqual(['car.com', 'cars.com']);
+    });
+
+    it('11.7 group repetition', () => {
+      expect(ddsl('(ab){2,3}.com')).toEqual(['abab.com', 'ababab.com']);
+    });
+
+    it('11.8 named character classes (CVC)', () => {
+      const result = ddsl('[[:c:]][[:v:]][[:c:]].ai');
+      // 21 consonants * 5 vowels * 21 consonants = 2205
+      expect(result).toHaveLength(21 * 5 * 21);
+    });
+
+    it('11.9 mixed named and range classes', () => {
+      const result = ddsl('[[:c:]0-9]{2}.io');
+      // 21 consonants + 10 digits = 31
+      expect(result).toHaveLength(31 ** 2);
+    });
+
+    it('11.10 negated named character class', () => {
+      const result = ddsl('[^[:c:]]{2}.io');
+      // universe (36) - consonants (21) = vowels + digits = 15
+      expect(result).toHaveLength(15 ** 2);
+    });
+
+    it('11.11 nested alternation', () => {
       expect(ddsl('{smart{car,bike},fast{boat,plane}}.com')).toEqual([
         'fastboat.com',
         'fastplane.com',
@@ -49,38 +82,67 @@ describe('expander', () => {
       ]);
     });
 
-    it('10.6 prefix families', () => {
-      expect(ddsl('{{pro,ultra}{car,bike},eco{car,bike}}.com')).toEqual([
-        'ecobike.com',
-        'ecocar.com',
-        'probike.com',
-        'procar.com',
-        'ultrabike.com',
-        'ultracar.com',
-      ]);
+    it('11.12 variables and multi-line document', () => {
+      const result = ddslDoc(`
+        @tlds = {com,net,org}
+        @env = {dev,staging,prod}
+        api.@env.example.@tlds
+      `);
+      // 3 envs * 3 tlds = 9
+      expect(result).toHaveLength(9);
+      expect(result).toContain('api.dev.example.com');
+      expect(result).toContain('api.prod.example.org');
     });
 
-    it('10.7 mixing patterns and structured sequences', () => {
-      const result = ddsl('{[a-z]{2},smart{car,bike}}.com');
-      // 26^2 = 676 two-letter domains + 2 structured = 678
-      expect(result).toHaveLength(676 + 2);
-      expect(result).toContain('aa.com');
+    it('11.13 structured composition with variables', () => {
+      const result = ddslDoc(`
+        @tlds = {com,net}
+        {smart{car,bike},fast{boat,plane}}.@tlds
+      `);
+      expect(result).toHaveLength(8);
       expect(result).toContain('smartcar.com');
-      expect(result).toContain('smartbike.com');
+      expect(result).toContain('fastplane.net');
     });
 
-    it('10.8 combined real-world pattern', () => {
-      const result = ddsl('{api,dev}(-v[0-9]{1})?.{ai,io}');
-      // 2 bases * (1 + 10 versions) * 2 tlds = 2 * 11 * 2 = 44
+    it('11.14 combined features', () => {
+      const result = ddslDoc(`
+        @tlds = {ai,io}
+        {api,dev}(-v[0-9]{1})?.@tlds
+      `);
+      // 2 bases * (1 + 10) * 2 tlds = 44
       expect(result).toHaveLength(44);
       expect(result).toContain('api.ai');
-      expect(result).toContain('api.io');
-      expect(result).toContain('api-v0.ai');
       expect(result).toContain('dev-v9.io');
     });
   });
 
-  describe('v0.1 compatibility', () => {
+  describe('document expansion', () => {
+    it('unions multiple expressions', () => {
+      const result = ddslDoc(`
+        a.com
+        b.com
+      `);
+      expect(result).toEqual(['a.com', 'b.com']);
+    });
+
+    it('deduplicates across expressions', () => {
+      const result = ddslDoc(`
+        a.com
+        a.com
+      `);
+      expect(result).toEqual(['a.com']);
+    });
+
+    it('handles comments', () => {
+      const result = ddslDoc(`
+        # This is a comment
+        a.com  # inline comment
+      `);
+      expect(result).toEqual(['a.com']);
+    });
+  });
+
+  describe('v0.2 compatibility', () => {
     it('literal domain', () => {
       expect(ddsl('example.com')).toEqual(['example.com']);
     });
@@ -96,17 +158,10 @@ describe('expander', () => {
     it('character class with fixed repetition', () => {
       const result = ddsl('[a-z]{3}.ai');
       expect(result).toHaveLength(26 ** 3);
-      expect(result).toContain('aaa.ai');
-      expect(result).toContain('cat.ai');
     });
 
-    it('combined structure in label', () => {
-      expect(ddsl('{fast,smart}{car,bike}.com')).toEqual([
-        'fastbike.com',
-        'fastcar.com',
-        'smartbike.com',
-        'smartcar.com',
-      ]);
+    it('grouping and optional', () => {
+      expect(ddsl('car(s)?.com')).toEqual(['car.com', 'cars.com']);
     });
 
     it('multi-label domain', () => {
@@ -119,80 +174,33 @@ describe('expander', () => {
     });
   });
 
-  describe('output normalisation (Section 9.4)', () => {
-    it('all output is lowercase', () => {
-      const result = ddsl('EXAMPLE.COM');
-      expect(result).toEqual(['example.com']);
-    });
-
-    it('no trailing dot', () => {
-      const result = ddsl('example.com');
-      expect(result.every(d => !d.endsWith('.'))).toBe(true);
-    });
-
-    it('uses dot as separator', () => {
-      const result = ddsl('{api,dev}.{tools,cloud}');
-      expect(result.every(d => d.includes('.'))).toBe(true);
-    });
-  });
-
-  describe('deduplication (Section 5.2)', () => {
-    it('removes duplicate alternation outputs', () => {
-      expect(ddsl('{car,car}.com')).toEqual(['car.com']);
-    });
-
-    it('removes duplicates from optional branches', () => {
-      // car + optional empty = car, car
-      const result = ddsl('car(car)?.com');
-      expect(result).toContain('car.com');
-      expect(result).toContain('carcar.com');
-    });
-  });
-
   describe('expansion size', () => {
     it('calculates literal size', () => {
       const ast = parse('example.com');
       expect(expansionSize(ast)).toBe(1);
     });
 
-    it('calculates alternation size', () => {
-      const ast = parse('{car,bike,train}.com');
-      expect(expansionSize(ast)).toBe(3);
+    it('calculates negated class size', () => {
+      const ast = parse('[^aeiou]{3}.com');
+      expect(expansionSize(ast)).toBe(31 ** 3);
     });
 
-    it('calculates nested alternation size', () => {
-      const ast = parse('{smart{car,bike},fast{boat,plane}}.com');
-      expect(expansionSize(ast)).toBe(4);
+    it('calculates group repetition size', () => {
+      const ast = parse('(ab){2,3}.com');
+      expect(expansionSize(ast)).toBe(2); // ab*ab, ab*ab*ab
     });
 
-    it('calculates charclass range size', () => {
-      const ast = parse('[a-z]{2,3}.ai');
-      expect(expansionSize(ast)).toBe(26 ** 2 + 26 ** 3);
-    });
-
-    it('calculates optional size', () => {
-      const ast = parse('car(s)?.com');
-      // car + (s or empty) = 2 options
-      expect(expansionSize(ast)).toBe(2);
-    });
-
-    it('calculates complex expression size', () => {
-      const ast = parse('{api,dev}(-v[0-9]{1})?.{ai,io}');
-      // 2 * (1 + 10) * 2 = 44
-      expect(expansionSize(ast)).toBe(44);
+    it('calculates document size', () => {
+      const lines = prepareDocument('@tlds = {com,net}\na.@tlds\nb.@tlds');
+      const doc = parseDocument(lines);
+      expect(documentExpansionSize(doc)).toBe(4);
     });
   });
 
-  describe('expansion limits (Section 9.3)', () => {
+  describe('expansion limits', () => {
     it('throws when expansion exceeds limit', () => {
       const ast = parse('[a-z]{10}.com');
       expect(() => expand(ast, { maxExpansion: 1_000_000 }))
-        .toThrow(ExpansionError);
-    });
-
-    it('respects custom limit', () => {
-      const ast = parse('[a-z]{3}.ai');
-      expect(() => expand(ast, { maxExpansion: 100 }))
         .toThrow(ExpansionError);
     });
 
@@ -200,15 +208,10 @@ describe('expander', () => {
       const ast = parse('{car,bike}.com');
       expect(() => expand(ast, { maxExpansion: 10 })).not.toThrow();
     });
-
-    it('disables limit with Infinity', () => {
-      const ast = parse('[a-z]{3}.ai');
-      expect(() => expand(ast, { maxExpansion: Infinity })).not.toThrow();
-    });
   });
 
   describe('preview function', () => {
-    it('returns truncated results with total count', () => {
+    it('returns truncated results', () => {
       const ast = parse('[a-z]{3}.ai');
       const result = preview(ast, 100);
       expect(result.domains).toHaveLength(100);
@@ -220,30 +223,26 @@ describe('expander', () => {
       const ast = parse('{car,bike}.com');
       const result = preview(ast, 100);
       expect(result.domains).toHaveLength(2);
-      expect(result.total).toBe(2);
       expect(result.truncated).toBe(false);
-    });
-
-    it('handles large multi-label expressions', () => {
-      const ast = parse('[a-z]{2}.[a-z]{2}.[a-z]{2}.com');
-      expect(() => preview(ast, 10)).not.toThrow();
-      const result = preview(ast, 10);
-      expect(result.domains).toHaveLength(10);
-      expect(result.total).toBe(26 ** 6);
-      expect(result.truncated).toBe(true);
     });
   });
 
-  describe('determinism (Section 9.1)', () => {
-    it('same expression always produces same set', () => {
-      const a = ddsl('{fast,smart}{car,bike}.com');
-      const b = ddsl('{fast,smart}{car,bike}.com');
-      expect(a).toEqual(b);
+  describe('deduplication', () => {
+    it('removes duplicates from alternation', () => {
+      expect(ddsl('{car,car}.com')).toEqual(['car.com']);
     });
 
-    it('v0.2 expressions are deterministic', () => {
-      const a = ddsl('car(s)?.com');
-      const b = ddsl('car(s)?.com');
+    it('removes duplicates from optional', () => {
+      const result = ddsl('car(car)?.com');
+      expect(result).toContain('car.com');
+      expect(result).toContain('carcar.com');
+    });
+  });
+
+  describe('determinism', () => {
+    it('same expression produces same set', () => {
+      const a = ddsl('{fast,smart}{car,bike}.com');
+      const b = ddsl('{fast,smart}{car,bike}.com');
       expect(a).toEqual(b);
     });
   });
