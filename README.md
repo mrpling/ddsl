@@ -235,7 +235,7 @@ cdn.@env.example.@tlds
 
 ## Specification
 
-Full specification for DDSl v0.3, [v0.3 spec](https://github.com/mrpling/ddsl/blob/main/spec/ddsl-v0.3.md) 
+Full specification for DDSl v0.3, [v0.3 spec](https://github.com/mrpling/ddsl/blob/main/SPEC.md) 
 The reference implementation is available at [ddsl.app](https://ddsl.app).
 
 ## License
