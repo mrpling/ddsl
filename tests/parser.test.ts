@@ -187,6 +187,70 @@ describe('parser', () => {
     });
   });
 
+  describe('repetition vs alternation disambiguation', () => {
+    it('charclass followed by alternation', () => {
+      const ast = parse('[ab]{cd,ef}.com');
+      const label = ast.labels[0];
+      // [ab] should be charclass with default {1}, {cd,ef} should be alternation
+      expect(label.elements[0].primary.type).toBe('charclass');
+      const cc = label.elements[0].primary as any;
+      expect(cc.repetitionMin).toBe(1);
+      expect(cc.repetitionMax).toBe(1);
+      expect(label.elements[1].primary.type).toBe('alternation');
+    });
+
+    it('group followed by alternation', () => {
+      const ast = parse('(ab){cd,ef}.com');
+      const label = ast.labels[0];
+      // (ab) should be group with default {1}, {cd,ef} should be alternation
+      expect(label.elements[0].primary.type).toBe('group');
+      const grp = label.elements[0].primary as any;
+      expect(grp.repetitionMin).toBe(1);
+      expect(grp.repetitionMax).toBe(1);
+      expect(label.elements[1].primary.type).toBe('alternation');
+    });
+
+    it('charclass with repetition followed by alternation', () => {
+      const ast = parse('[ab]{2}{cd,ef}.com');
+      const label = ast.labels[0];
+      // [ab]{2} should be charclass with rep {2}, {cd,ef} should be alternation
+      const cc = label.elements[0].primary as any;
+      expect(cc.type).toBe('charclass');
+      expect(cc.repetitionMin).toBe(2);
+      expect(cc.repetitionMax).toBe(2);
+      expect(label.elements[1].primary.type).toBe('alternation');
+    });
+
+    it('group with repetition followed by alternation', () => {
+      const ast = parse('(ab){2}{cd,ef}.com');
+      const label = ast.labels[0];
+      // (ab){2} should be group with rep {2}, {cd,ef} should be alternation
+      const grp = label.elements[0].primary as any;
+      expect(grp.type).toBe('group');
+      expect(grp.repetitionMin).toBe(2);
+      expect(grp.repetitionMax).toBe(2);
+      expect(label.elements[1].primary.type).toBe('alternation');
+    });
+
+    it('charclass followed by digits-only repetition', () => {
+      const ast = parse('[ab]{3}.com');
+      const cc = ast.labels[0].elements[0].primary as any;
+      // {3} should be consumed as repetition, not alternation
+      expect(cc.type).toBe('charclass');
+      expect(cc.repetitionMin).toBe(3);
+      expect(cc.repetitionMax).toBe(3);
+      expect(ast.labels[0].elements).toHaveLength(1);
+    });
+
+    it('charclass followed by range repetition', () => {
+      const ast = parse('[ab]{2,4}.com');
+      const cc = ast.labels[0].elements[0].primary as any;
+      expect(cc.repetitionMin).toBe(2);
+      expect(cc.repetitionMax).toBe(4);
+      expect(ast.labels[0].elements).toHaveLength(1);
+    });
+  });
+
   describe('spec examples (Section 11)', () => {
     it('11.1 literal', () => {
       expect(() => parse('example.com')).not.toThrow();

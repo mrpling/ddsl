@@ -97,7 +97,7 @@ const domains = expand(ast);
 
 ### `expandDocument(doc, options?)`
 
-Expand a parsed document into the full set of domain names.
+Expand a parsed document into the full set of domain names. Throws `ExpansionError` if the expansion exceeds `maxExpansion`.
 
 ```ts
 import { parseDocument, prepareDocument, expandDocument } from 'ddsl';
@@ -107,16 +107,29 @@ const doc = parseDocument(lines);
 const domains = expandDocument(doc);
 ```
 
-### `preview(ast, limit)`
+### `preview(ast, limit, options?)`
 
-Preview an expansion with a capped result set. Unlike `expand()`, this never throws on large expressions.
+Preview an expansion with a capped result set. Returns a `PreviewResult` with `domains`, `total`, and `truncated`. Throws `ExpansionError` if the total expansion size exceeds `maxExpansion`.
 
 ```ts
 import { parse, preview } from 'ddsl';
 
 const ast = parse('[a-z]{10}.com');
-const result = preview(ast, 100);
+const result = preview(ast, 100, { maxExpansion: Infinity });
 // { domains: [...100 items], total: 141167095653376, truncated: true }
+```
+
+### `previewDocument(doc, limit, options?)`
+
+Preview a document expansion with a capped result set. Throws `ExpansionError` if the total expansion size exceeds `maxExpansion`.
+
+```ts
+import { parseDocument, prepareDocument, previewDocument } from 'ddsl';
+
+const lines = prepareDocument(input);
+const doc = parseDocument(lines);
+const result = previewDocument(doc, 100);
+// { domains: [...], total: number, truncated: boolean }
 ```
 
 ### `expansionSize(ast)`
@@ -128,6 +141,18 @@ import { parse, expansionSize } from 'ddsl';
 
 const ast = parse('[a-z]{10}.com');
 expansionSize(ast); // 141,167,095,653,376
+```
+
+### `documentExpansionSize(doc)`
+
+Calculate the total expansion size of a document without expanding.
+
+```ts
+import { parseDocument, prepareDocument, documentExpansionSize } from 'ddsl';
+
+const lines = prepareDocument(input);
+const doc = parseDocument(lines);
+documentExpansionSize(doc); // 18
 ```
 
 ### `prepare(input)`
@@ -210,7 +235,8 @@ cdn.@env.example.@tlds
 
 ## Specification
 
-The full DDSL v0.3 specification is available at [ddsl.app](https://ddsl.app).
+Full specification for DDSl v0.3, [v0.3 spec](https://github.com/mrpling/ddsl/blob/main/spec/ddsl-v0.3.md) 
+The reference implementation is available at [ddsl.app](https://ddsl.app).
 
 ## License
 

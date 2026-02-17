@@ -10,7 +10,7 @@
   <div class="container">
     <header>
       <h1>DDSL</h1>
-      <p class="subtitle">Domain Domain-Specific Language</p>
+      <p class="subtitle">A Domain-Specific Language for Domain Names</p>
       <p class="description">
         A declarative language for describing finite sets of domain names using structural patterns.
         Write an expression, and DDSL expands it into all matching domain names.
@@ -119,12 +119,44 @@ example.@tlds"
         <li><code>(ab){2,3}.com</code> &rarr; abab.com, ababab.com</li>
       </ul>
 
-      <h3>Multi-line Example</h3>
+      <h3>Multi-line Examples</h3>
+      <pre class="example-block">#set prefixes & suffixes
+@prefix = {ab,rs,ev,pb}
+@suffix = {ai,si}
+
+#set keywords
+@keywords = {agent,assistant,studio,lab,stack}
+
+#alternate tlds
+@tlds = {com,ai}
+
+#generate
+@prefix@keywords.@tlds
+@keywords@suffix.@tlds
+
+results &rarr;
+abagent.com
+abagent.ai
+abassistant.com
+..
+agentai.com
+agentai.ai
+agentsi.com
+</pre>
       <pre class="example-block">@tlds = {com,net,org}
 @env = {dev,prod}
 
 # API endpoints
-api.@env.example.@tlds</pre>
+api.@env.example.@tlds
+
+results &rarr;
+api.dev.example.com
+api.dev.example.net
+api.dev.example.org
+api.prod.example.com
+api.prod.example.net
+api.prod.example.org
+</pre>
     </section>
   </div>
 

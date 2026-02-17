@@ -228,6 +228,21 @@ function parseSequenceString(input: string, varMap: Map<string, ElementNode[]>):
     return src[pos++];
   }
 
+  // Lookahead to check if '{' starts a repetition ({digits} or {digits,digits})
+  function isRepetitionAhead(): boolean {
+    if (src[pos] !== '{') return false;
+    let i = pos + 1;
+    if (i >= src.length || !isDigit(src[i])) return false;
+    while (i < src.length && isDigit(src[i])) i++;
+    if (i >= src.length) return false;
+    if (src[i] === '}') return true;
+    if (src[i] !== ',') return false;
+    i++;
+    if (i >= src.length || !isDigit(src[i])) return false;
+    while (i < src.length && isDigit(src[i])) i++;
+    return i < src.length && src[i] === '}';
+  }
+
   const elements = parseSequenceInner();
 
   if (pos < src.length) {
@@ -331,11 +346,11 @@ function parseSequenceString(input: string, varMap: Map<string, ElementNode[]>):
     }
     advance(); // consume ')'
 
-    // Check for repetition
+    // Check for repetition (only if { is followed by digits pattern)
     let repetitionMin = 1;
     let repetitionMax = 1;
 
-    if (peek() === '{') {
+    if (isRepetitionAhead()) {
       const rep = parseRepetition();
       repetitionMin = rep.min;
       repetitionMax = rep.max;
@@ -461,11 +476,11 @@ function parseSequenceString(input: string, varMap: Map<string, ElementNode[]>):
     }
     chars.sort();
 
-    // Check for repetition (optional, defaults to {1})
+    // Check for repetition (only if { is followed by digits pattern)
     let repetitionMin = 1;
     let repetitionMax = 1;
 
-    if (peek() === '{') {
+    if (isRepetitionAhead()) {
       const rep = parseRepetition();
       repetitionMin = rep.min;
       repetitionMax = rep.max;
@@ -546,6 +561,21 @@ function parseExpression(input: string, varMap: Map<string, ElementNode[]>): Dom
 
   function advance(): string {
     return src[pos++];
+  }
+
+  // Lookahead to check if '{' starts a repetition ({digits} or {digits,digits})
+  function isRepetitionAhead(): boolean {
+    if (src[pos] !== '{') return false;
+    let i = pos + 1;
+    if (i >= src.length || !isDigit(src[i])) return false;
+    while (i < src.length && isDigit(src[i])) i++;
+    if (i >= src.length) return false;
+    if (src[i] === '}') return true;
+    if (src[i] !== ',') return false;
+    i++;
+    if (i >= src.length || !isDigit(src[i])) return false;
+    while (i < src.length && isDigit(src[i])) i++;
+    return i < src.length && src[i] === '}';
   }
 
   function parseDomain(): DomainNode {
@@ -681,7 +711,7 @@ function parseExpression(input: string, varMap: Map<string, ElementNode[]>): Dom
     let repetitionMin = 1;
     let repetitionMax = 1;
 
-    if (peek() === '{') {
+    if (isRepetitionAhead()) {
       const rep = parseRepetition();
       repetitionMin = rep.min;
       repetitionMax = rep.max;
@@ -808,7 +838,7 @@ function parseExpression(input: string, varMap: Map<string, ElementNode[]>): Dom
     let repetitionMin = 1;
     let repetitionMax = 1;
 
-    if (peek() === '{') {
+    if (isRepetitionAhead()) {
       const rep = parseRepetition();
       repetitionMin = rep.min;
       repetitionMax = rep.max;

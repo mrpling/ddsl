@@ -179,6 +179,19 @@ var DDSL = (() => {
     function advance() {
       return src[pos++];
     }
+    function isRepetitionAhead() {
+      if (src[pos] !== "{") return false;
+      let i = pos + 1;
+      if (i >= src.length || !isDigit(src[i])) return false;
+      while (i < src.length && isDigit(src[i])) i++;
+      if (i >= src.length) return false;
+      if (src[i] === "}") return true;
+      if (src[i] !== ",") return false;
+      i++;
+      if (i >= src.length || !isDigit(src[i])) return false;
+      while (i < src.length && isDigit(src[i])) i++;
+      return i < src.length && src[i] === "}";
+    }
     const elements = parseSequenceInner();
     if (pos < src.length) {
       throw new ParseError(`Unexpected character '${src[pos]}'`, pos);
@@ -262,7 +275,7 @@ var DDSL = (() => {
       advance();
       let repetitionMin = 1;
       let repetitionMax = 1;
-      if (peek() === "{") {
+      if (isRepetitionAhead()) {
         const rep = parseRepetition();
         repetitionMin = rep.min;
         repetitionMax = rep.max;
@@ -364,7 +377,7 @@ var DDSL = (() => {
       chars.sort();
       let repetitionMin = 1;
       let repetitionMax = 1;
-      if (peek() === "{") {
+      if (isRepetitionAhead()) {
         const rep = parseRepetition();
         repetitionMin = rep.min;
         repetitionMax = rep.max;
@@ -427,6 +440,19 @@ var DDSL = (() => {
     }
     function advance() {
       return src[pos++];
+    }
+    function isRepetitionAhead() {
+      if (src[pos] !== "{") return false;
+      let i = pos + 1;
+      if (i >= src.length || !isDigit(src[i])) return false;
+      while (i < src.length && isDigit(src[i])) i++;
+      if (i >= src.length) return false;
+      if (src[i] === "}") return true;
+      if (src[i] !== ",") return false;
+      i++;
+      if (i >= src.length || !isDigit(src[i])) return false;
+      while (i < src.length && isDigit(src[i])) i++;
+      return i < src.length && src[i] === "}";
     }
     function parseDomain() {
       const labels = [];
@@ -532,7 +558,7 @@ var DDSL = (() => {
       advance();
       let repetitionMin = 1;
       let repetitionMax = 1;
-      if (peek() === "{") {
+      if (isRepetitionAhead()) {
         const rep = parseRepetition();
         repetitionMin = rep.min;
         repetitionMax = rep.max;
@@ -634,7 +660,7 @@ var DDSL = (() => {
       chars.sort();
       let repetitionMin = 1;
       let repetitionMax = 1;
-      if (peek() === "{") {
+      if (isRepetitionAhead()) {
         const rep = parseRepetition();
         repetitionMin = rep.min;
         repetitionMax = rep.max;

@@ -227,6 +227,81 @@ describe('expander', () => {
     });
   });
 
+  describe('repetition vs alternation disambiguation', () => {
+    it('charclass followed by alternation', () => {
+      // [ab]{cd,ef} → charclass {1} + alternation
+      expect(ddsl('[ab]{cd,ef}.com')).toEqual([
+        'acd.com', 'aef.com', 'bcd.com', 'bef.com',
+      ].sort());
+    });
+
+    it('group followed by alternation', () => {
+      // (ab){cd,ef} → group + alternation
+      expect(ddsl('(ab){cd,ef}.com')).toEqual(['abcd.com', 'abef.com']);
+    });
+
+    it('charclass with repetition then alternation', () => {
+      // [ab]{2}{cd,ef} → charclass rep 2 + alternation
+      const result = ddsl('[ab]{2}{cd,ef}.com');
+      expect(result).toHaveLength(8); // 4 pairs * 2 alternates
+      expect(result).toContain('aacd.com');
+      expect(result).toContain('abef.com');
+      expect(result).toContain('bbcd.com');
+    });
+
+    it('group with repetition then alternation', () => {
+      // (ab){2}{cd,ef} → group rep 2 + alternation
+      expect(ddsl('(ab){2}{cd,ef}.com')).toEqual(['ababcd.com', 'ababef.com']);
+    });
+
+    it('direct expression matches variable-substituted equivalent', () => {
+      // Direct: [ab]{cd,ef}.com
+      const direct = ddsl('[ab]{cd,ef}.com');
+
+      // Via variables: @a@b.com where @a=[ab], @b={cd,ef}
+      const viaVars = ddslDoc(`
+        @a = [ab]
+        @b = {cd,ef}
+        @a@b.com
+      `);
+
+      expect(direct).toEqual(viaVars);
+    });
+
+    it('variable order produces correct different results', () => {
+      // @a@b → [ab]{cd,ef} → charclass + alternation
+      const ab = ddslDoc(`
+        @a = [ab]
+        @b = {cd,ef}
+        @a@b.com
+      `);
+
+      // @b@a → {cd,ef}[ab] → alternation + charclass
+      const ba = ddslDoc(`
+        @a = [ab]
+        @b = {cd,ef}
+        @b@a.com
+      `);
+
+      // Both valid but different results
+      expect(ab).toContain('acd.com');  // [ab] then {cd,ef}
+      expect(ba).toContain('cda.com');  // {cd,ef} then [ab]
+      expect(ab).not.toEqual(ba);
+    });
+
+    it('CVC prefix followed by keyword alternation (original bug)', () => {
+      const result = ddslDoc(`
+        @prefix = [[:c:]][[:v:]][[:c:]]
+        @keywords = {agent,lab}
+        @prefix@keywords.com
+      `);
+      // 21*5*21 CVC combos * 2 keywords = 4410
+      expect(result).toHaveLength(21 * 5 * 21 * 2);
+      expect(result).toContain('bavagent.com');
+      expect(result).toContain('bavlab.com');
+    });
+  });
+
   describe('deduplication', () => {
     it('removes duplicates from alternation', () => {
       expect(ddsl('{car,car}.com')).toEqual(['car.com']);

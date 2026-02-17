@@ -7,7 +7,7 @@ const resultsEl = document.getElementById('results');
 const errorEl = document.getElementById('error');
 const lineStatusEl = document.getElementById('line-status');
 
-const PREVIEW_LIMIT = 10;
+const PREVIEW_LIMIT = 100;
 const MAX_EXPANSION = 1_000_000;
 
 function showError(message) {
