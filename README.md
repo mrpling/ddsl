@@ -1,4 +1,4 @@
-# DDSL
+# DDSL v0.3
 
 A declarative language for describing sets of domain names using structural patterns.
 
@@ -233,9 +233,14 @@ api.@env.example.@tlds
 cdn.@env.example.@tlds
 ```
 
+## Stability / Versioning
+
+Spec-first: behavior follows spec.md, v0.3 may change; breaking changes will be noted in CHANGELOG.md
+
 ## Specification
 
-Full specification for DDSl v0.3, [v0.3 spec](https://github.com/mrpling/ddsl/blob/main/SPEC.md) 
+Full specification for DDSl v0.3, [v0.3 spec](https://github.com/mrpling/ddsl/blob/main/spec.md) 
+
 The reference implementation is available at [ddsl.app](https://ddsl.app).
 
 ## License
