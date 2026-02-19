@@ -251,6 +251,96 @@ describe('parser', () => {
     });
   });
 
+  describe('standalone named classes', () => {
+    it('parses [:v:] as charclass with vowel chars and default repetition', () => {
+      const ast = parse('[:v:].com');
+      const cc = ast.labels[0].elements[0].primary as any;
+      expect(cc.type).toBe('charclass');
+      expect(cc.chars).toEqual(['a', 'e', 'i', 'o', 'u']);
+      expect(cc.negated).toBe(false);
+      expect(cc.repetitionMin).toBe(1);
+      expect(cc.repetitionMax).toBe(1);
+    });
+
+    it('parses [:c:] as charclass with 21 consonant chars', () => {
+      const ast = parse('[:c:].com');
+      const cc = ast.labels[0].elements[0].primary as any;
+      expect(cc.type).toBe('charclass');
+      expect(cc.chars).toHaveLength(21);
+      expect(cc.negated).toBe(false);
+      expect(cc.repetitionMin).toBe(1);
+      expect(cc.repetitionMax).toBe(1);
+    });
+
+    it('supports explicit fixed repetition', () => {
+      const ast = parse('[:c:]{3}.com');
+      const cc = ast.labels[0].elements[0].primary as any;
+      expect(cc.type).toBe('charclass');
+      expect(cc.repetitionMin).toBe(3);
+      expect(cc.repetitionMax).toBe(3);
+    });
+
+    it('supports range repetition', () => {
+      const ast = parse('[:v:]{2,4}.com');
+      const cc = ast.labels[0].elements[0].primary as any;
+      expect(cc.repetitionMin).toBe(2);
+      expect(cc.repetitionMax).toBe(4);
+    });
+
+    it('supports optional operator', () => {
+      const ast = parse('pre[:v:]?.com');
+      const el = ast.labels[0].elements[1];
+      expect(el.optional).toBe(true);
+      expect(el.primary.type).toBe('charclass');
+    });
+
+    it('parses a sequence of standalone named classes', () => {
+      const ast = parse('[:c:][:v:][:c:].ai');
+      const label = ast.labels[0];
+      expect(label.elements).toHaveLength(3);
+      expect(label.elements[0].primary.type).toBe('charclass');
+      expect(label.elements[1].primary.type).toBe('charclass');
+      expect(label.elements[2].primary.type).toBe('charclass');
+    });
+
+    it('mixes with surrounding literals', () => {
+      const ast = parse('pre[:v:]suf.com');
+      const label = ast.labels[0];
+      expect(label.elements[0].primary.type).toBe('literal');
+      expect(label.elements[1].primary.type).toBe('charclass');
+      expect(label.elements[2].primary.type).toBe('literal');
+    });
+
+    it('produces the same char set as the equivalent bracket form', () => {
+      const standalone = parse('[:v:].com');
+      const bracket = parse('[[:v:]].com');
+      const ccS = standalone.labels[0].elements[0].primary as any;
+      const ccB = bracket.labels[0].elements[0].primary as any;
+      expect(ccS.chars).toEqual(ccB.chars);
+    });
+
+    it('works in variable definitions', () => {
+      const lines = prepareDocument('@v = [:v:]\n@v.com');
+      expect(() => parseDocument(lines)).not.toThrow();
+    });
+
+    it('spec example 11.8: standalone CVC form parses without error', () => {
+      expect(() => parse('[:c:][:v:][:c:].ai')).not.toThrow();
+    });
+
+    it('rejects unknown named class', () => {
+      expect(() => parse('[:x:].com')).toThrow(ParseError);
+    });
+
+    it('rejects malformed named class (missing closing :])', () => {
+      expect(() => parse('[:v.com')).toThrow(ParseError);
+    });
+
+    it('rejects standalone named class as sole optional element (empty label)', () => {
+      expect(() => parse('[:v:]?.com')).toThrow(ParseError);
+    });
+  });
+
   describe('spec examples (Section 11)', () => {
     it('11.1 literal', () => {
       expect(() => parse('example.com')).not.toThrow();

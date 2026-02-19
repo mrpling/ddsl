@@ -73,9 +73,9 @@ example.@tlds"
         </div>
         <div class="syntax-item">
           <h3>Named Classes</h3>
-          <p>[:v:] vowels, [:c:] consonants</p>
-          <code>[[:v:]]</code>
-          <code>[[:c:]]{3}</code>
+          <p>[:v:] vowels, [:c:] consonants — standalone or inside [...]</p>
+          <code>[:v:]</code>
+          <code>[:c:]{3}</code>
           <code>[[:c:]0-9]{2}</code>
         </div>
         <div class="syntax-item">
@@ -115,7 +115,7 @@ example.@tlds"
         <li><code>{app,api}.example.com</code> &rarr; app.example.com, api.example.com</li>
         <li><code>car(s)?.com</code> &rarr; car.com, cars.com</li>
         <li><code>[^aeiou]{3}.com</code> &rarr; 29,791 domains (consonants + digits)</li>
-        <li><code>[[:c:]][[:v:]][[:c:]].ai</code> &rarr; 2,205 CVC domains</li>
+        <li><code>[:c:][:v:][:c:].ai</code> &rarr; 2,205 CVC domains</li>
         <li><code>(ab){2,3}.com</code> &rarr; abab.com, ababab.com</li>
       </ul>
 

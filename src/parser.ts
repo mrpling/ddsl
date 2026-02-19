@@ -281,6 +281,9 @@ function parseSequenceString(input: string, varMap: Map<string, ElementNode[]>):
     const ch = peek();
 
     if (ch === '[') {
+      if (pos + 1 < src.length && src[pos + 1] === ':') {
+        return parseStandaloneNamedClass();
+      }
       return parseCharClass();
     }
 
@@ -329,6 +332,44 @@ function parseSequenceString(input: string, varMap: Map<string, ElementNode[]>):
       throw new ParseError(`Undefined variable @${name}`, pos);
     }
     return { type: 'varref', name };
+  }
+
+  function parseStandaloneNamedClass(): CharClassNode {
+    const start = pos;
+    advance(); // consume '['
+    advance(); // consume ':'
+
+    let className = '';
+    while (pos < src.length && peek() !== ':') {
+      className += advance();
+    }
+
+    if (peek() !== ':' || src[pos + 1] !== ']') {
+      throw new ParseError('Invalid named class syntax', pos);
+    }
+    advance(); // consume ':'
+    advance(); // consume ']'
+
+    let chars: string[];
+    if (className === 'v') {
+      chars = [...VOWELS];
+    } else if (className === 'c') {
+      chars = [...CONSONANTS];
+    } else {
+      throw new ParseError(`Unknown named class [:${className}:]`, start);
+    }
+    chars.sort();
+
+    let repetitionMin = 1;
+    let repetitionMax = 1;
+
+    if (isRepetitionAhead()) {
+      const rep = parseRepetition();
+      repetitionMin = rep.min;
+      repetitionMax = rep.max;
+    }
+
+    return { type: 'charclass', chars, negated: false, repetitionMin, repetitionMax };
   }
 
   function parseGroup(): GroupNode {
@@ -643,6 +684,9 @@ function parseExpression(input: string, varMap: Map<string, ElementNode[]>): Dom
     const ch = peek();
 
     if (ch === '[') {
+      if (pos + 1 < src.length && src[pos + 1] === ':') {
+        return parseStandaloneNamedClass();
+      }
       return parseCharClass();
     }
 
@@ -691,6 +735,44 @@ function parseExpression(input: string, varMap: Map<string, ElementNode[]>): Dom
       throw new ParseError(`Undefined variable @${name}`, pos);
     }
     return { type: 'varref', name };
+  }
+
+  function parseStandaloneNamedClass(): CharClassNode {
+    const start = pos;
+    advance(); // consume '['
+    advance(); // consume ':'
+
+    let className = '';
+    while (pos < src.length && peek() !== ':') {
+      className += advance();
+    }
+
+    if (peek() !== ':' || src[pos + 1] !== ']') {
+      throw new ParseError('Invalid named class syntax', pos);
+    }
+    advance(); // consume ':'
+    advance(); // consume ']'
+
+    let chars: string[];
+    if (className === 'v') {
+      chars = [...VOWELS];
+    } else if (className === 'c') {
+      chars = [...CONSONANTS];
+    } else {
+      throw new ParseError(`Unknown named class [:${className}:]`, start);
+    }
+    chars.sort();
+
+    let repetitionMin = 1;
+    let repetitionMax = 1;
+
+    if (isRepetitionAhead()) {
+      const rep = parseRepetition();
+      repetitionMin = rep.min;
+      repetitionMax = rep.max;
+    }
+
+    return { type: 'charclass', chars, negated: false, repetitionMin, repetitionMax };
   }
 
   function parseGroup(): GroupNode {

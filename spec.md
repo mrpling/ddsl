@@ -1,4 +1,4 @@
-# DDSL v0.3 Specification
+# DDSL v0.3.1 Specification
 
 ## 1. Introduction
 
@@ -19,7 +19,7 @@ DDSL describes possible domain names, not their availability, value, or DNS beha
 
 ## 2. Design Goals
 
-DDSL v0.3 is designed to be:
+DDSL v0.3.1 is designed to be:
 
 **Declarative**
 Expressions describe what domains exist in the set, not how to generate them.
@@ -148,12 +148,12 @@ The hyphen (`-`) is a valid literal character in domain labels but is not part o
 
 ## 6. Syntax Overview
 
-DDSL v0.3 supports:
+DDSL v0.3.1 supports:
 
 - Literal text
 - Alternation `{...}`
 - Character classes `[...]` including negation `[^...]`
-- Named character classes `[:v:]` and `[:c:]` (inside `[...]`)
+- Named character classes `[:v:]` and `[:c:]` (can also be placed inside `[...]`)
 - Repetition `{n}` and `{min,max}` on character classes and groups
 - Grouping `(...)`
 - Optional operator `?`
@@ -213,15 +213,19 @@ A character class matches a single character from a defined set and is expanded 
 
 **Negated:** `[^aeiou]` -- matches all characters in the universe (see Section 5.5) except those listed.
 
-**Named classes (inside brackets):**
+**Named classes:**
 
 - `[:v:]` -- vowels: a, e, i, o, u
 - `[:c:]` -- consonants: b, c, d, f, g, h, j, k, l, m, n, p, q, r, s, t, v, w, x, y, z
 
-Named classes appear inside square brackets and may be combined with other class items:
+Named classes may be used in two places:
 
-- `[[:v:]]` -- vowels only
-- `[[:c:]]` -- consonants only
+- As standalone elements in an expression. In this form, [:v:] and [:c:] behave like character classes with an implied repetition of {1}.
+
+- As atoms inside bracket character classes [...]. In this form, they contribute their character sets to the enclosing class, and may be negated via ^ in the enclosing class.
+
+- `[:v:]` -- vowels only
+- `[:c:]` -- consonants only
 - `[[:c:]0-9]` -- consonants and digits
 - `[[:v:][:c:]]` -- vowels and consonants (equivalent to `[a-z]`)
 
@@ -230,7 +234,7 @@ Named classes appear inside square brackets and may be combined with other class
 - `[^[:c:]]` -- everything in the universe except consonants (vowels and digits)
 - `[^[:v:]0-9]` -- everything in the universe except vowels and digits (consonants only)
 
-The negation operator `^` applies to the entire class contents. It MUST appear immediately after the opening `[` if present.
+The negation operator `^` applies to the entire class contents. It MUST appear immediately after the opening `[` if present. When a bracket class contains named classes, implementations MUST expand named classes to their underlying character sets before applying ^ negation.
 
 ### 6.6 Variables
 
@@ -310,6 +314,7 @@ element     = primary, [ "?" ] ;
 
 primary     = literal
             | char_class, [ repetition ]
+            | named_class, [ repetition ]
             | alternation
             | group, [ repetition ]
             | var_ref ;
@@ -508,7 +513,7 @@ Expands to: abab.com, ababab.com
 ### 11.8 Named Character Classes
 
 ```
-[[:c:]][[:v:]][[:c:]].ai
+[:c:][:v:][:c:].ai
 ```
 
 Expands to all CVC .ai labels where:
@@ -614,7 +619,7 @@ dev-v9.io
 
 ## 12. Conformance
 
-An implementation conforms to DDSL v0.3 if it:
+An implementation conforms to DDSL v0.3.1 if it:
 
 - Accepts all valid expressions and documents
 - Rejects invalid expressions (including those containing whitespace)
@@ -623,7 +628,7 @@ An implementation conforms to DDSL v0.3 if it:
 - Deduplicates results
 - Normalises output as specified
 
-Single-expression mode (without document features) is a valid subset. An implementation that only supports single expressions (no variables, no multi-line, no comments) conforms to DDSL v0.3 expression-level conformance but not document-level conformance.
+Single-expression mode (without document features) is a valid subset. An implementation that only supports single expressions (no variables, no multi-line, no comments) conforms to DDSL v0.3.1 expression-level conformance but not document-level conformance.
 
 ---
 
@@ -673,7 +678,7 @@ Future versions may introduce:
 - Objective metrics
 - Extension profiles
 
-These features are intentionally excluded from v0.3 to preserve simplicity and stability.
+These features are intentionally excluded from v0.3.1 to preserve simplicity and stability.
 
 ---
 

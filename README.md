@@ -1,4 +1,4 @@
-# DDSL v0.3
+# DDSL v0.3.1
 
 A declarative language for describing sets of domain names using structural patterns.
 
@@ -18,7 +18,7 @@ ddsl('car(s)?.com');
 ddsl('[^aeiou]{3}.com');
 // All 3-letter domains using consonants and digits (29,791)
 
-ddsl('[[:c:]][[:v:]][[:c:]].ai');
+ddsl('[:c:][:v:][:c:].ai');
 // All CVC .ai domains (2,205)
 
 // Multi-line documents with variables
@@ -189,7 +189,7 @@ ddsl('[a-z]{4}.ai', { maxExpansion: 500_000 });
 |---|---|---|---|
 | `maxExpansion` | `number` | `1,000,000` | Maximum domains to produce. Throws `ExpansionError` if exceeded. Set to `Infinity` to disable. |
 
-## DDSL v0.3 Syntax
+## DDSL v0.3.1 Syntax
 
 | Element | Example | Description |
 |---|---|---|
@@ -199,8 +199,10 @@ ddsl('[a-z]{4}.ai', { maxExpansion: 500_000 });
 | Repetition | `[a-z]{3}` | Fixed repetition |
 | Range | `[a-z]{2,4}` | Variable-length sequences |
 | Negation | `[^aeiou]` | Exclude characters |
-| Named class | `[[:v:]]` | Vowels (a,e,i,o,u) |
-| Named class | `[[:c:]]` | Consonants |
+| Named class (standalone) | `[:v:]` | Vowels — one character, like `[a-z]{1}` |
+| Named class (standalone) | `[:c:]` | Consonants — one character |
+| Named class (in bracket) | `[[:v:]]` | Vowels inside a bracket class |
+| Named class (in bracket) | `[[:c:]0-9]` | Consonants and digits combined |
 | Grouping | `(abc)` | Group elements together |
 | Group repetition | `(ab){2,3}` | Repeat a group |
 | Optional | `(s)?` | Make a group optional |
@@ -215,7 +217,7 @@ example.com                         → example.com
 car(s)?.com                         → car.com, cars.com
 [a-z].io                            → 26 one-letter domains
 [^aeiou]{3}.com                     → 29,791 domains (consonants + digits)
-[[:c:]][[:v:]][[:c:]].ai            → 2,205 CVC domains
+[:c:][:v:][:c:].ai                  → 2,205 CVC domains
 (ab){2,3}.com                       → abab.com, ababab.com
 {smart{car,bike},fast{boat,plane}}.com → 4 domains
 ```
@@ -235,11 +237,11 @@ cdn.@env.example.@tlds
 
 ## Stability / Versioning
 
-Spec-first: behavior follows spec.md, v0.3 may change; breaking changes will be noted in CHANGELOG.md
+Spec-first: behavior follows spec.md, v0.3.1 may change; breaking changes will be noted in CHANGELOG.md
 
 ## Specification
 
-Full specification for DDSl v0.3, [v0.3 spec](https://github.com/mrpling/ddsl/blob/main/spec.md) 
+Full specification for DDSl v0.3.1, [v0.3.1 spec](https://github.com/mrpling/ddsl/blob/main/spec.md) 
 
 The reference implementation is available at [ddsl.app](https://ddsl.app).
 

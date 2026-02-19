@@ -302,6 +302,87 @@ describe('expander', () => {
     });
   });
 
+  describe('standalone named classes', () => {
+    it('[:v:] expands to 5 single-vowel domains', () => {
+      const result = ddsl('[:v:].ai');
+      expect(result).toHaveLength(5);
+      expect(result).toContain('a.ai');
+      expect(result).toContain('e.ai');
+      expect(result).toContain('u.ai');
+    });
+
+    it('[:c:] expands to 21 single-consonant domains', () => {
+      const result = ddsl('[:c:].ai');
+      expect(result).toHaveLength(21);
+      expect(result).toContain('b.ai');
+      expect(result).toContain('z.ai');
+      expect(result).not.toContain('a.ai');
+      expect(result).not.toContain('e.ai');
+    });
+
+    it('spec example 11.8 standalone: [:c:][:v:][:c:].ai produces 2205 domains', () => {
+      const result = ddsl('[:c:][:v:][:c:].ai');
+      expect(result).toHaveLength(21 * 5 * 21);
+      expect(result).toContain('bab.ai');
+      expect(result).toContain('zuz.ai');
+    });
+
+    it('[:v:]{2}.io expands to 25 domains', () => {
+      const result = ddsl('[:v:]{2}.io');
+      expect(result).toHaveLength(5 ** 2);
+      expect(result).toContain('aa.io');
+      expect(result).toContain('uu.io');
+    });
+
+    it('[:c:]{2,3}.com expands to 21² + 21³ domains', () => {
+      const result = ddsl('[:c:]{2,3}.com');
+      expect(result).toHaveLength(21 ** 2 + 21 ** 3);
+    });
+
+    it('pre[:v:]?.com expands to 6 domains', () => {
+      expect(ddsl('pre[:v:]?.com')).toEqual(
+        ['pre.com', 'prea.com', 'pree.com', 'prei.com', 'preo.com', 'preu.com'].sort(),
+      );
+    });
+
+    it('[:c:] and [[:c:]] produce identical expansions', () => {
+      expect(ddsl('[:c:].io')).toEqual(ddsl('[[:c:]].io'));
+    });
+
+    it('[:v:] and [[:v:]] produce identical expansions', () => {
+      expect(ddsl('[:v:].io')).toEqual(ddsl('[[:v:]].io'));
+    });
+
+    it('mixes with a following literal', () => {
+      const result = ddsl('[:c:]3.com');
+      expect(result).toHaveLength(21);
+      expect(result).toContain('b3.com');
+      expect(result).toContain('z3.com');
+      expect(result).not.toContain('a3.com');
+    });
+
+    it('mixes with a bracket char class', () => {
+      const result = ddsl('[:c:][0-9].com');
+      expect(result).toHaveLength(21 * 10);
+      expect(result).toContain('b0.com');
+      expect(result).toContain('z9.com');
+    });
+
+    it('works inside a variable definition', () => {
+      const result = ddslDoc(`
+        @cvc = [:c:][:v:][:c:]
+        @cvc.io
+      `);
+      expect(result).toHaveLength(21 * 5 * 21);
+    });
+
+    it('calculates expansionSize correctly', () => {
+      expect(expansionSize(parse('[:v:].io'))).toBe(5);
+      expect(expansionSize(parse('[:c:]{2}.io'))).toBe(21 ** 2);
+      expect(expansionSize(parse('[:c:][:v:][:c:].ai'))).toBe(21 * 5 * 21);
+    });
+  });
+
   describe('deduplication', () => {
     it('removes duplicates from alternation', () => {
       expect(ddsl('{car,car}.com')).toEqual(['car.com']);

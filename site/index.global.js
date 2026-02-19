@@ -220,6 +220,9 @@ var DDSL = (() => {
     function parsePrimary() {
       const ch = peek();
       if (ch === "[") {
+        if (pos + 1 < src.length && src[pos + 1] === ":") {
+          return parseStandaloneNamedClass();
+        }
         return parseCharClass();
       }
       if (ch === "{") {
@@ -261,6 +264,37 @@ var DDSL = (() => {
         throw new ParseError(`Undefined variable @${name}`, pos);
       }
       return { type: "varref", name };
+    }
+    function parseStandaloneNamedClass() {
+      const start = pos;
+      advance();
+      advance();
+      let className = "";
+      while (pos < src.length && peek() !== ":") {
+        className += advance();
+      }
+      if (peek() !== ":" || src[pos + 1] !== "]") {
+        throw new ParseError("Invalid named class syntax", pos);
+      }
+      advance();
+      advance();
+      let chars;
+      if (className === "v") {
+        chars = [...VOWELS];
+      } else if (className === "c") {
+        chars = [...CONSONANTS];
+      } else {
+        throw new ParseError(`Unknown named class [:${className}:]`, start);
+      }
+      chars.sort();
+      let repetitionMin = 1;
+      let repetitionMax = 1;
+      if (isRepetitionAhead()) {
+        const rep = parseRepetition();
+        repetitionMin = rep.min;
+        repetitionMax = rep.max;
+      }
+      return { type: "charclass", chars, negated: false, repetitionMin, repetitionMax };
     }
     function parseGroup() {
       const start = pos;
@@ -503,6 +537,9 @@ var DDSL = (() => {
     function parsePrimary() {
       const ch = peek();
       if (ch === "[") {
+        if (pos + 1 < src.length && src[pos + 1] === ":") {
+          return parseStandaloneNamedClass();
+        }
         return parseCharClass();
       }
       if (ch === "{") {
@@ -544,6 +581,37 @@ var DDSL = (() => {
         throw new ParseError(`Undefined variable @${name}`, pos);
       }
       return { type: "varref", name };
+    }
+    function parseStandaloneNamedClass() {
+      const start = pos;
+      advance();
+      advance();
+      let className = "";
+      while (pos < src.length && peek() !== ":") {
+        className += advance();
+      }
+      if (peek() !== ":" || src[pos + 1] !== "]") {
+        throw new ParseError("Invalid named class syntax", pos);
+      }
+      advance();
+      advance();
+      let chars;
+      if (className === "v") {
+        chars = [...VOWELS];
+      } else if (className === "c") {
+        chars = [...CONSONANTS];
+      } else {
+        throw new ParseError(`Unknown named class [:${className}:]`, start);
+      }
+      chars.sort();
+      let repetitionMin = 1;
+      let repetitionMax = 1;
+      if (isRepetitionAhead()) {
+        const rep = parseRepetition();
+        repetitionMin = rep.min;
+        repetitionMax = rep.max;
+      }
+      return { type: "charclass", chars, negated: false, repetitionMin, repetitionMax };
     }
     function parseGroup() {
       const start = pos;
