@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## - 2026-04-23 - v0.3.4
+- Docs: fix README/spec version references (no code changes)
+
 ## - 2026-04-23 - v0.3.3
 - Line numbers added to parse errors.
 
