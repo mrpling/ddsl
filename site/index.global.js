@@ -942,9 +942,14 @@ var DDSL = (() => {
         `Expression would expand to ${total.toLocaleString()} domains, which exceeds the limit of ${maxExpansion.toLocaleString()}`
       );
     }
-    const truncated = total > limit;
     const labelSets = ast.labels.map(expandLabel);
-    const domains = [...new Set(cartesianProductCapped(labelSets, limit).map((parts) => parts.join(".")))];
+    const seen = /* @__PURE__ */ new Set();
+    for (const combo of cartesianProductGen(labelSets)) {
+      seen.add(combo.join("."));
+      if (seen.size > limit) break;
+    }
+    const truncated = seen.size > limit;
+    const domains = [...seen].slice(0, limit);
     return { domains, total, truncated };
   }
   function previewDocument(doc, limit, options) {
@@ -957,19 +962,17 @@ var DDSL = (() => {
           `Document would expand to ${total.toLocaleString()} domains, which exceeds the limit of ${maxExpansion.toLocaleString()}`
         );
       }
-      const truncated = total > limit;
-      const allDomains = [];
-      let remaining = limit;
+      const allDomains = /* @__PURE__ */ new Set();
       for (const expr of doc.expressions) {
-        if (remaining <= 0) break;
-        const result = preview(expr, remaining, { maxExpansion: Infinity });
-        for (const s of result.domains) {
-          allDomains.push(s);
+        const result = preview(expr, limit + 1, { maxExpansion: Infinity });
+        for (const d of result.domains) {
+          allDomains.add(d);
         }
-        remaining -= result.domains.length;
+        if (allDomains.size > limit) break;
       }
+      const truncated = allDomains.size > limit;
       return {
-        domains: [...new Set(allDomains)].slice(0, limit),
+        domains: [...allDomains].slice(0, limit),
         total,
         truncated
       };
@@ -1085,20 +1088,17 @@ var DDSL = (() => {
     }
     return result;
   }
-  function cartesianProductCapped(sets, limit) {
-    if (sets.length === 0) return [[]];
-    let result = [[]];
-    for (const set of sets) {
-      const next = [];
-      outer: for (const existing of result) {
-        for (const item of set) {
-          next.push([...existing, item]);
-          if (next.length >= limit) break outer;
-        }
-      }
-      result = next;
+  function* cartesianProductGen(sets) {
+    if (sets.length === 0) {
+      yield [];
+      return;
     }
-    return result;
+    const [first, ...rest] = sets;
+    for (const item of first) {
+      for (const combo of cartesianProductGen(rest)) {
+        yield [item, ...combo];
+      }
+    }
   }
 
   // src/index.ts

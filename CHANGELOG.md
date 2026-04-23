@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## - 2026-04-23 - v0.3.2
+- Fix preview/previewDocument to dedupe while generating so previews fill correctly up to limit
+
 ## - 2026-02-19 - v0.3.1
 - Named classes `[:v:]` and `[:c:]` are now valid as standalone elements in an expression, behaving
   like a character class with an implied `{1}` repetition. Explicit repetition (e.g. `[:c:]{3,5}`)

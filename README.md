@@ -1,4 +1,4 @@
-# DDSL v0.3.1
+# DDSL v0.3.2
 
 A declarative language for describing sets of domain names using structural patterns.
 
@@ -189,7 +189,7 @@ ddsl('[a-z]{4}.ai', { maxExpansion: 500_000 });
 |---|---|---|---|
 | `maxExpansion` | `number` | `1,000,000` | Maximum domains to produce. Throws `ExpansionError` if exceeded. Set to `Infinity` to disable. |
 
-## DDSL v0.3.1 Syntax
+## DDSL v0.3.2 Syntax
 
 | Element | Example | Description |
 |---|---|---|
@@ -237,11 +237,11 @@ cdn.@env.example.@tlds
 
 ## Stability / Versioning
 
-Spec-first: behavior follows spec.md, v0.3.1 may change; breaking changes will be noted in CHANGELOG.md
+Spec-first: behavior follows spec.md, v0.3.2 may change; breaking changes will be noted in CHANGELOG.md
 
 ## Specification
 
-Full specification for DDSl v0.3.1, [v0.3.1 spec](https://github.com/mrpling/ddsl/blob/main/spec.md) 
+Full specification for DDSl v0.3.2, [v0.3.2 spec](https://github.com/mrpling/ddsl/blob/main/spec.md) 
 
 The reference implementation is available at [ddsl.app](https://ddsl.app).
 

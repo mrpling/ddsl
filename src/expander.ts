@@ -258,9 +258,14 @@ export function preview(ast: DomainNode, limit: number, options?: ExpandOptions)
     );
   }
 
-  const truncated = total > limit;
   const labelSets = ast.labels.map(expandLabel);
-  const domains = [...new Set(cartesianProductCapped(labelSets, limit).map(parts => parts.join('.')))];
+  const seen = new Set<string>();
+  for (const combo of cartesianProductGen(labelSets)) {
+    seen.add(combo.join('.'));
+    if (seen.size > limit) break;
+  }
+  const truncated = seen.size > limit;
+  const domains = [...seen].slice(0, limit);
 
   return { domains, total, truncated };
 }
@@ -284,23 +289,20 @@ export function previewDocument(doc: DocumentNode, limit: number, options?: Expa
       );
     }
 
-    const truncated = total > limit;
-    const allDomains: string[] = [];
-    let remaining = limit;
+    const allDomains = new Set<string>();
 
     for (const expr of doc.expressions) {
-      if (remaining <= 0) break;
-
-      // Pass Infinity to inner preview since we already checked total
-      const result = preview(expr, remaining, { maxExpansion: Infinity });
-      for (const s of result.domains) {
-        allDomains.push(s);
+      const result = preview(expr, limit + 1, { maxExpansion: Infinity });
+      for (const d of result.domains) {
+        allDomains.add(d);
       }
-      remaining -= result.domains.length;
+      if (allDomains.size > limit) break;
     }
 
+    const truncated = allDomains.size > limit;
+
     return {
-      domains: [...new Set(allDomains)].slice(0, limit),
+      domains: [...allDomains].slice(0, limit),
       total,
       truncated,
     };
@@ -458,4 +460,17 @@ function cartesianProductCapped(sets: string[][], limit: number): string[][] {
   }
 
   return result;
+}
+
+function* cartesianProductGen(sets: string[][]): Generator<string[]> {
+  if (sets.length === 0) {
+    yield [];
+    return;
+  }
+  const [first, ...rest] = sets;
+  for (const item of first) {
+    for (const combo of cartesianProductGen(rest)) {
+      yield [item, ...combo];
+    }
+  }
 }

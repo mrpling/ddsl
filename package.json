@@ -1,6 +1,6 @@
 {
   "name": "ddsl",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "DDSL — a declarative language for describing sets of domain names",
   "keywords": ["domain", "dsl", "dns", "domain-names", "parser"],
   "author": "Andrew Brier",
