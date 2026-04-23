@@ -1,16 +1,26 @@
 {
   "name": "ddsl",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "DDSL — a declarative language for describing sets of domain names",
-  "keywords": ["domain", "dsl", "dns", "domain-names", "parser"],
+  "keywords": [
+    "domain",
+    "dsl",
+    "dns",
+    "domain-names",
+    "parser"
+  ],
   "author": "Andrew Brier",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/mrpling/ddsl.git"
   },
-  "bugs": { "url": "https://github.com/mrpling/ddsl/issues" },
-  "publishConfig": { "access": "public" },
+  "bugs": {
+    "url": "https://github.com/mrpling/ddsl/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "homepage": "https://ddsl.app",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -26,7 +36,7 @@
       "require": {
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
-      }    
+      }
     }
   },
   "files": [
