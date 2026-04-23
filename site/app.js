@@ -49,8 +49,8 @@ function isDocumentMode(input) {
 
 function getExpansionSize(raw) {
   if (isDocumentMode(raw)) {
-    const lines = DDSL.prepareDocument(raw);
-    const doc = DDSL.parseDocument(lines);
+    const { lines, lineNumbers } = DDSL.prepareDocument(raw);
+    const doc = DDSL.parseDocument(lines, lineNumbers);
     return { size: DDSL.documentExpansionSize(doc), mode: 'document', doc };
   } else {
     const expression = DDSL.prepare(raw);

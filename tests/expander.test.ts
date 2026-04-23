@@ -14,7 +14,7 @@ function ddsl(expr: string): string[] {
 }
 
 function ddslDoc(input: string): string[] {
-  const lines = prepareDocument(input);
+  const { lines } = prepareDocument(input);
   const doc = parseDocument(lines);
   return expandDocument(doc).sort();
 }
@@ -191,7 +191,7 @@ describe('expander', () => {
     });
 
     it('calculates document size', () => {
-      const lines = prepareDocument('@tlds = {com,net}\na.@tlds\nb.@tlds');
+      const { lines } = prepareDocument('@tlds = {com,net}\na.@tlds\nb.@tlds');
       const doc = parseDocument(lines);
       expect(documentExpansionSize(doc)).toBe(4);
     });

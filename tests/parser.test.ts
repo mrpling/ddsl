@@ -14,27 +14,27 @@ describe('parser', () => {
 
   describe('prepareDocument utility', () => {
     it('strips comments', () => {
-      const lines = prepareDocument('example.com # comment');
+      const { lines } = prepareDocument('example.com # comment');
       expect(lines).toEqual(['example.com']);
     });
 
     it('removes empty lines', () => {
-      const lines = prepareDocument('a.com\n\nb.com');
+      const { lines } = prepareDocument('a.com\n\nb.com');
       expect(lines).toEqual(['a.com', 'b.com']);
     });
 
     it('trims whitespace', () => {
-      const lines = prepareDocument('  example.com  ');
+      const { lines } = prepareDocument('  example.com  ');
       expect(lines).toEqual(['example.com']);
     });
 
     it('normalizes to lowercase', () => {
-      const lines = prepareDocument('EXAMPLE.COM');
+      const { lines } = prepareDocument('EXAMPLE.COM');
       expect(lines).toEqual(['example.com']);
     });
 
     it('handles full-line comments', () => {
-      const lines = prepareDocument('# comment\nexample.com');
+      const { lines } = prepareDocument('# comment\nexample.com');
       expect(lines).toEqual(['example.com']);
     });
   });
@@ -158,7 +158,7 @@ describe('parser', () => {
 
   describe('document parsing', () => {
     it('parses variable definition', () => {
-      const lines = prepareDocument('@tlds = {com,net}\nexample.@tlds');
+      const { lines } = prepareDocument('@tlds = {com,net}\nexample.@tlds');
       const doc = parseDocument(lines);
       expect(doc.variables).toHaveLength(1);
       expect(doc.variables[0].name).toBe('tlds');
@@ -166,23 +166,23 @@ describe('parser', () => {
     });
 
     it('parses multiple expressions', () => {
-      const lines = prepareDocument('a.com\nb.com');
+      const { lines } = prepareDocument('a.com\nb.com');
       const doc = parseDocument(lines);
       expect(doc.expressions).toHaveLength(2);
     });
 
     it('rejects undefined variable', () => {
-      const lines = prepareDocument('example.@undefined');
+      const { lines } = prepareDocument('example.@undefined');
       expect(() => parseDocument(lines)).toThrow(ParseError);
     });
 
     it('rejects variable redefinition', () => {
-      const lines = prepareDocument('@a = {com,net}\n@a = {org,io}');
+      const { lines } = prepareDocument('@a = {com,net}\n@a = {org,io}');
       expect(() => parseDocument(lines)).toThrow(ParseError);
     });
 
     it('allows variable referencing previous variable', () => {
-      const lines = prepareDocument('@a = {com,net}\n@b = @a\nexample.@b');
+      const { lines } = prepareDocument('@a = {com,net}\n@b = @a\nexample.@b');
       expect(() => parseDocument(lines)).not.toThrow();
     });
   });
@@ -320,7 +320,7 @@ describe('parser', () => {
     });
 
     it('works in variable definitions', () => {
-      const lines = prepareDocument('@v = [:v:]\n@v.com');
+      const { lines } = prepareDocument('@v = [:v:]\n@v.com');
       expect(() => parseDocument(lines)).not.toThrow();
     });
 

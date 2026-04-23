@@ -86,7 +86,7 @@ export function ddsl(expression: string, options?: ExpandOptions): string[] {
  * ```
  */
 export function ddslDocument(input: string, options?: ExpandOptions): string[] {
-  const lines = prepareDocument(input);
-  const doc = parseDocument(lines);
+  const { lines, lineNumbers } = prepareDocument(input);
+  const doc = parseDocument(lines, lineNumbers);
   return expandDocument(doc, options);
 }

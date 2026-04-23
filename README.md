@@ -73,15 +73,20 @@ import { parse } from 'ddsl';
 const ast = parse('car(s)?.com');
 ```
 
-### `parseDocument(lines)`
+### `parseDocument(lines, lineNumbers?)`
 
-Parse prepared document lines into a document AST.
+Parse prepared document lines into a document AST. The optional `lineNumbers` array (parallel to `lines`) maps each line to its original source line number. When provided, `ParseError.line` reflects the actual source line rather than the preprocessed index — useful for highlighting errors in an editor.
 
 ```ts
 import { parseDocument, prepareDocument } from 'ddsl';
 
-const lines = prepareDocument(input);
+// Without line tracking (backward compatible)
+const { lines } = prepareDocument(input);
 const doc = parseDocument(lines);
+
+// With accurate line numbers in errors
+const { lines, lineNumbers } = prepareDocument(input);
+const doc = parseDocument(lines, lineNumbers);
 ```
 
 ### `expand(ast, options?)`
@@ -167,16 +172,27 @@ const ast = parse(prepare('  { car, bike }.com  '));
 
 ### `prepareDocument(input)`
 
-Prepare a multi-line document: strips comments, trims lines, removes empty lines.
+Prepare a multi-line document: strips comments, trims lines, removes empty lines, normalises case. Returns `{ lines, lineNumbers }` where `lineNumbers[i]` is the 1-based original source line for `lines[i]`.
 
 ```ts
 import { prepareDocument, parseDocument } from 'ddsl';
 
-const lines = prepareDocument(`
+const { lines, lineNumbers } = prepareDocument(`
   @tlds = {com,net}  # TLDs
   example.@tlds
 `);
-// ['@tlds = {com,net}', 'example.@tlds']
+// lines:       ['@tlds = {com,net}', 'example.@tlds']
+// lineNumbers: [2, 3]
+
+try {
+  const doc = parseDocument(lines, lineNumbers);
+} catch (e) {
+  if (e instanceof ParseError) {
+    console.log(e.line);       // original source line (1-based), or undefined
+    console.log(e.position);   // character position within that line
+    console.log(e.rawMessage); // message text without the 'Parse error at...' prefix
+  }
+}
 ```
 
 ### Options

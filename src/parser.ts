@@ -21,12 +21,19 @@ import type {
 } from './types';
 
 export class ParseError extends Error {
+  public readonly rawMessage: string;
   constructor(
     message: string,
     public readonly position: number,
+    public readonly line?: number,
   ) {
-    super(`Parse error at position ${position}: ${message}`);
+    super(
+      line !== undefined
+        ? `Parse error at line ${line} position ${position}: ${message}`
+        : `Parse error at position ${position}: ${message}`,
+    );
     this.name = 'ParseError';
+    this.rawMessage = message;
   }
 }
 
@@ -82,20 +89,23 @@ export function prepare(input: string): string {
 /**
  * Prepare a multi-line document for parsing.
  * Strips comments, trims lines, removes empty lines, normalizes case.
+ * Returns both the processed lines and their original 1-based source line numbers,
+ * which can be passed to parseDocument() for accurate ParseError.line values.
  */
-export function prepareDocument(input: string): string[] {
-  return input
-    .split('\n')
-    .map(line => {
-      // Strip comments
-      const commentIdx = line.indexOf('#');
-      if (commentIdx !== -1) {
-        line = line.slice(0, commentIdx);
-      }
-      // Trim whitespace
-      return line.trim().toLowerCase();
-    })
-    .filter(line => line.length > 0);
+export function prepareDocument(input: string): { lines: string[]; lineNumbers: number[] } {
+  const lines: string[] = [];
+  const lineNumbers: number[] = [];
+
+  input.split('\n').forEach((raw, i) => {
+    const commentIdx = raw.indexOf('#');
+    const text = (commentIdx !== -1 ? raw.slice(0, commentIdx) : raw).trim().toLowerCase();
+    if (text.length > 0) {
+      lines.push(text);
+      lineNumbers.push(i + 1);
+    }
+  });
+
+  return { lines, lineNumbers };
 }
 
 /**
@@ -158,49 +168,60 @@ function substituteVariables(line: string, varStrings: Map<string, string>): str
 
 /**
  * Parse a multi-line DDSL document.
+ * @param lines - Processed lines (from prepareDocument or a plain string[])
+ * @param lineNumbers - Optional source line numbers parallel to lines (from prepareDocument).
+ *   When provided, ParseError.line will reflect the original source line number.
  */
-export function parseDocument(lines: string[]): DocumentNode {
+export function parseDocument(lines: string[], lineNumbers?: number[]): DocumentNode {
   const variables: VariableDefNode[] = [];
   const expressions: DomainNode[] = [];
   const varStrings = new Map<string, string>();
 
-  for (const line of lines) {
-    if (line.startsWith('@')) {
-      // Variable definition
-      const eqIdx = line.indexOf('=');
-      if (eqIdx === -1) {
-        // Could be a variable reference at start of expression
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    try {
+      if (line.startsWith('@')) {
+        // Variable definition
+        const eqIdx = line.indexOf('=');
+        if (eqIdx === -1) {
+          // Could be a variable reference at start of expression
+          const substituted = substituteVariables(line, varStrings);
+          const domain = parseExpression(substituted, new Map());
+          expressions.push(domain);
+        } else {
+          const name = line.slice(1, eqIdx).trim().toLowerCase();
+          const value = line.slice(eqIdx + 1).trim();
+
+          if (name.length === 0) {
+            throw new ParseError('Empty variable name', 0);
+          }
+
+          if (varStrings.has(name)) {
+            throw new ParseError(`Variable @${name} is already defined`, 0);
+          }
+
+          const substituted = substituteVariables(value, varStrings);
+          if (substituted.length === 0) {
+            throw new ParseError('Empty variable definition', 0);
+          }
+
+          // Parse the value as a sequence (after textual substitution)
+          const elements = parseSequenceString(substituted, new Map());
+
+          varStrings.set(name, substituted);
+          variables.push({ type: 'vardef', name, elements });
+        }
+      } else {
+        // Expression
         const substituted = substituteVariables(line, varStrings);
         const domain = parseExpression(substituted, new Map());
         expressions.push(domain);
-      } else {
-        const name = line.slice(1, eqIdx).trim().toLowerCase();
-        const value = line.slice(eqIdx + 1).trim();
-
-        if (name.length === 0) {
-          throw new ParseError('Empty variable name', 0);
-        }
-
-        if (varStrings.has(name)) {
-          throw new ParseError(`Variable @${name} is already defined`, 0);
-        }
-
-        const substituted = substituteVariables(value, varStrings);
-        if (substituted.length === 0) {
-          throw new ParseError('Empty variable definition', 0);
-        }
-
-        // Parse the value as a sequence (after textual substitution)
-        const elements = parseSequenceString(substituted, new Map());
-
-        varStrings.set(name, substituted);
-        variables.push({ type: 'vardef', name, elements });
       }
-    } else {
-      // Expression
-      const substituted = substituteVariables(line, varStrings);
-      const domain = parseExpression(substituted, new Map());
-      expressions.push(domain);
+    } catch (e) {
+      if (e instanceof ParseError && e.line === undefined) {
+        throw new ParseError(e.rawMessage, e.position, lineNumbers?.[i]);
+      }
+      throw e;
     }
   }
 

@@ -41,10 +41,14 @@ var DDSL = (() => {
 
   // src/parser.ts
   var ParseError = class extends Error {
-    constructor(message, position) {
-      super(`Parse error at position ${position}: ${message}`);
+    constructor(message, position, line) {
+      super(
+        line !== void 0 ? `Parse error at line ${line} position ${position}: ${message}` : `Parse error at position ${position}: ${message}`
+      );
       this.position = position;
+      this.line = line;
       this.name = "ParseError";
+      this.rawMessage = message;
     }
   };
   var LETTER = /^[a-z]$/;
@@ -80,13 +84,17 @@ var DDSL = (() => {
     return input.replace(/\s+/g, "");
   }
   function prepareDocument(input) {
-    return input.split("\n").map((line) => {
-      const commentIdx = line.indexOf("#");
-      if (commentIdx !== -1) {
-        line = line.slice(0, commentIdx);
+    const lines = [];
+    const lineNumbers = [];
+    input.split("\n").forEach((raw, i) => {
+      const commentIdx = raw.indexOf("#");
+      const text = (commentIdx !== -1 ? raw.slice(0, commentIdx) : raw).trim().toLowerCase();
+      if (text.length > 0) {
+        lines.push(text);
+        lineNumbers.push(i + 1);
       }
-      return line.trim().toLowerCase();
-    }).filter((line) => line.length > 0);
+    });
+    return { lines, lineNumbers };
   }
   function canProduceEmpty(elements) {
     return elements.every((el) => {
@@ -130,38 +138,46 @@ var DDSL = (() => {
     }
     return result;
   }
-  function parseDocument(lines) {
+  function parseDocument(lines, lineNumbers) {
     const variables = [];
     const expressions = [];
     const varStrings = /* @__PURE__ */ new Map();
-    for (const line of lines) {
-      if (line.startsWith("@")) {
-        const eqIdx = line.indexOf("=");
-        if (eqIdx === -1) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      try {
+        if (line.startsWith("@")) {
+          const eqIdx = line.indexOf("=");
+          if (eqIdx === -1) {
+            const substituted = substituteVariables(line, varStrings);
+            const domain = parseExpression(substituted, /* @__PURE__ */ new Map());
+            expressions.push(domain);
+          } else {
+            const name = line.slice(1, eqIdx).trim().toLowerCase();
+            const value = line.slice(eqIdx + 1).trim();
+            if (name.length === 0) {
+              throw new ParseError("Empty variable name", 0);
+            }
+            if (varStrings.has(name)) {
+              throw new ParseError(`Variable @${name} is already defined`, 0);
+            }
+            const substituted = substituteVariables(value, varStrings);
+            if (substituted.length === 0) {
+              throw new ParseError("Empty variable definition", 0);
+            }
+            const elements = parseSequenceString(substituted, /* @__PURE__ */ new Map());
+            varStrings.set(name, substituted);
+            variables.push({ type: "vardef", name, elements });
+          }
+        } else {
           const substituted = substituteVariables(line, varStrings);
           const domain = parseExpression(substituted, /* @__PURE__ */ new Map());
           expressions.push(domain);
-        } else {
-          const name = line.slice(1, eqIdx).trim().toLowerCase();
-          const value = line.slice(eqIdx + 1).trim();
-          if (name.length === 0) {
-            throw new ParseError("Empty variable name", 0);
-          }
-          if (varStrings.has(name)) {
-            throw new ParseError(`Variable @${name} is already defined`, 0);
-          }
-          const substituted = substituteVariables(value, varStrings);
-          if (substituted.length === 0) {
-            throw new ParseError("Empty variable definition", 0);
-          }
-          const elements = parseSequenceString(substituted, /* @__PURE__ */ new Map());
-          varStrings.set(name, substituted);
-          variables.push({ type: "vardef", name, elements });
         }
-      } else {
-        const substituted = substituteVariables(line, varStrings);
-        const domain = parseExpression(substituted, /* @__PURE__ */ new Map());
-        expressions.push(domain);
+      } catch (e) {
+        if (e instanceof ParseError && e.line === void 0) {
+          throw new ParseError(e.rawMessage, e.position, lineNumbers?.[i]);
+        }
+        throw e;
       }
     }
     return { type: "document", variables, expressions };
@@ -1106,8 +1122,8 @@ var DDSL = (() => {
     return expand(parse(expression), options);
   }
   function ddslDocument(input, options) {
-    const lines = prepareDocument(input);
-    const doc = parseDocument(lines);
+    const { lines, lineNumbers } = prepareDocument(input);
+    const doc = parseDocument(lines, lineNumbers);
     return expandDocument(doc, options);
   }
   return __toCommonJS(index_exports);

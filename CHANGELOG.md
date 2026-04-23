@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## - 2026-04-23 - v0.3.3
+- Line numbers added to parse errors.
+
 ## - 2026-04-23 - v0.3.2
 - Fix preview/previewDocument to dedupe while generating so previews fill correctly up to limit
 
