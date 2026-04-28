@@ -179,18 +179,26 @@ export function parseDocument(lines: string[], lineNumbers?: number[]): Document
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    // positionOffset: how many chars into `line` the sub-string being parsed starts.
+    // Errors from sub-string parsers report positions relative to the sub-string;
+    // adding this offset gives the position within the original source line.
+    let positionOffset = 0;
     try {
       if (line.startsWith('@')) {
         // Variable definition
         const eqIdx = line.indexOf('=');
         if (eqIdx === -1) {
-          // Could be a variable reference at start of expression
+          // Expression starting with a variable reference — substitution may shift
+          // positions, so offset stays 0 (best effort).
           const substituted = substituteVariables(line, varStrings);
           const domain = parseExpression(substituted, new Map());
           expressions.push(domain);
         } else {
           const name = line.slice(1, eqIdx).trim().toLowerCase();
-          const value = line.slice(eqIdx + 1).trim();
+          const rawValue = line.slice(eqIdx + 1);
+          const value = rawValue.trim();
+          // Offset = position where value starts within line (after '@name=', spaces).
+          positionOffset = eqIdx + 1 + (rawValue.length - rawValue.trimStart().length);
 
           if (name.length === 0) {
             throw new ParseError('Empty variable name', 0);
@@ -212,14 +220,15 @@ export function parseDocument(lines: string[], lineNumbers?: number[]): Document
           variables.push({ type: 'vardef', name, elements });
         }
       } else {
-        // Expression
+        // Expression — no offset needed when there are no variable references
+        // (substituted === line). With substitution, positions are best effort.
         const substituted = substituteVariables(line, varStrings);
         const domain = parseExpression(substituted, new Map());
         expressions.push(domain);
       }
     } catch (e) {
       if (e instanceof ParseError && e.line === undefined) {
-        throw new ParseError(e.rawMessage, e.position, lineNumbers?.[i]);
+        throw new ParseError(e.rawMessage, e.position + positionOffset, lineNumbers?.[i]);
       }
       throw e;
     }

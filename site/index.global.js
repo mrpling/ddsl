@@ -144,6 +144,7 @@ var DDSL = (() => {
     const varStrings = /* @__PURE__ */ new Map();
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
+      let positionOffset = 0;
       try {
         if (line.startsWith("@")) {
           const eqIdx = line.indexOf("=");
@@ -153,7 +154,9 @@ var DDSL = (() => {
             expressions.push(domain);
           } else {
             const name = line.slice(1, eqIdx).trim().toLowerCase();
-            const value = line.slice(eqIdx + 1).trim();
+            const rawValue = line.slice(eqIdx + 1);
+            const value = rawValue.trim();
+            positionOffset = eqIdx + 1 + (rawValue.length - rawValue.trimStart().length);
             if (name.length === 0) {
               throw new ParseError("Empty variable name", 0);
             }
@@ -175,7 +178,7 @@ var DDSL = (() => {
         }
       } catch (e) {
         if (e instanceof ParseError && e.line === void 0) {
-          throw new ParseError(e.rawMessage, e.position, lineNumbers?.[i]);
+          throw new ParseError(e.rawMessage, e.position + positionOffset, lineNumbers?.[i]);
         }
         throw e;
       }
