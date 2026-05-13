@@ -4,6 +4,7 @@ import {
   expand,
   expandDocument,
   preview,
+  previewDocument,
   expansionSize,
   documentExpansionSize,
   ExpansionError,
@@ -224,6 +225,212 @@ describe('expander', () => {
       const result = preview(ast, 100);
       expect(result.domains).toHaveLength(2);
       expect(result.truncated).toBe(false);
+    });
+  });
+
+  describe('seeded sampling', () => {
+    const ast = () => parse('[a-z]{3}.ai'); // 17,576 domains
+
+    it('returns exactly limit domains', () => {
+      const result = preview(ast(), 10, { seed: 42 });
+      expect(result.domains).toHaveLength(10);
+    });
+
+    it('is deterministic — same seed, same result', () => {
+      const a = preview(ast(), 10, { seed: 42 });
+      const b = preview(ast(), 10, { seed: 42 });
+      expect(a.domains).toEqual(b.domains);
+    });
+
+    it('different seeds produce different samples', () => {
+      const a = preview(ast(), 10, { seed: 42 });
+      const b = preview(ast(), 10, { seed: 99 });
+      expect(a.domains).not.toEqual(b.domains);
+    });
+
+    it('samples from across the space, not just the prefix', () => {
+      const prefix = preview(ast(), 10).domains;
+      const sampled = preview(ast(), 10, { seed: 42 }).domains;
+      expect(sampled).not.toEqual(prefix);
+    });
+
+    it('all sampled domains are valid members of the expansion', () => {
+      const full = new Set(expand(ast(), { maxExpansion: Infinity }));
+      const result = preview(ast(), 50, { seed: 1 });
+      for (const d of result.domains) {
+        expect(full.has(d)).toBe(true);
+      }
+    });
+
+    it('includes seed in result', () => {
+      const result = preview(ast(), 10, { seed: 42 });
+      expect(result.seed).toBe(42);
+      expect(result.truncated).toBe(true);
+      expect(result.total).toBe(17576);
+    });
+
+    it('no seed field when seed not provided', () => {
+      const result = preview(ast(), 10);
+      expect(result.seed).toBeUndefined();
+    });
+
+    it('falls back to prefix when total <= limit', () => {
+      const small = parse('{car,bike}.com');
+      const result = preview(small, 100, { seed: 42 });
+      // T=2 <= limit=100, seeded sampling not needed; full expansion returned
+      expect(result.domains).toHaveLength(2);
+      expect(result.truncated).toBe(false);
+      expect(result.seed).toBeUndefined();
+    });
+
+    it('works with charclass repetition ranges', () => {
+      const ast = parse('[a-z]{2,3}.io'); // 26²+26³ = 18252
+      const result = preview(ast, 20, { seed: 7 });
+      expect(result.domains).toHaveLength(20);
+      // All results should be 2 or 3 letter labels
+      for (const d of result.domains) {
+        const label = d.replace('.io', '');
+        expect(label.length).toBeGreaterThanOrEqual(2);
+        expect(label.length).toBeLessThanOrEqual(3);
+      }
+    });
+
+    it('works with optional elements', () => {
+      const ast = parse('car(s)?.{com,net,org,io,ai}');
+      const result = preview(ast, 5, { seed: 1 });
+      expect(result.domains.length).toBeGreaterThan(0);
+      for (const d of result.domains) {
+        expect(d).toMatch(/^cars?\./);
+      }
+    });
+
+    it('works with nested alternations', () => {
+      const ast = parse('{smart{car,bike},fast{boat,plane}}.{com,net}');
+      const result = preview(ast, 4, { seed: 0 });
+      const full = new Set(expand(ast, { maxExpansion: Infinity }));
+      for (const d of result.domains) {
+        expect(full.has(d)).toBe(true);
+      }
+    });
+
+    it('works with groups and repetition', () => {
+      const ast = parse('(ab){2,4}.com');
+      const result = preview(ast, 2, { seed: 5 });
+      const full = expand(ast, { maxExpansion: Infinity });
+      for (const d of result.domains) {
+        expect(full).toContain(d);
+      }
+    });
+
+    describe('pagination with offset', () => {
+      const ast = () => parse('[a-z]{3}.ai'); // 17,576 total, ordered aaa…zzz
+
+      it('page 2 starts where page 1 ends', () => {
+        const p1 = preview(ast(), 10).domains;
+        const p2 = preview(ast(), 10, { offset: 10 }).domains;
+        expect(p2[0]).not.toBe(p1[p1.length - 1]);
+        // no overlap
+        expect(p1.some(d => p2.includes(d))).toBe(false);
+      });
+
+      it('pages are contiguous and cover the space', () => {
+        const full = expand(ast(), { maxExpansion: Infinity });
+        const page1 = preview(ast(), 5).domains;
+        const page2 = preview(ast(), 5, { offset: 5 }).domains;
+        expect(page1).toEqual(full.slice(0, 5));
+        expect(page2).toEqual(full.slice(5, 10));
+      });
+
+      it('last page is shorter than limit', () => {
+        const total = 17576;
+        const limit = 100;
+        const lastOffset = total - 50;
+        const result = preview(ast(), limit, { offset: lastOffset });
+        expect(result.domains.length).toBe(50);
+        expect(result.truncated).toBe(false);
+      });
+
+      it('truncated is false on last page, true on earlier pages', () => {
+        const p1 = preview(ast(), 100, { offset: 0 });
+        expect(p1.truncated).toBe(true);
+        const last = preview(ast(), 100, { offset: 17500 });
+        expect(last.truncated).toBe(false);
+      });
+
+      it('returns offset in result', () => {
+        const result = preview(ast(), 10, { offset: 20 });
+        expect(result.offset).toBe(20);
+      });
+
+      it('no offset field when offset not provided', () => {
+        const result = preview(ast(), 10);
+        expect(result.offset).toBeUndefined();
+      });
+
+      it('seeded pagination: same seed + incrementing offset gives non-overlapping pages', () => {
+        const p1 = preview(ast(), 10, { seed: 42, offset: 0 }).domains;
+        const p2 = preview(ast(), 10, { seed: 42, offset: 10 }).domains;
+        expect(p1.some(d => p2.includes(d))).toBe(false);
+      });
+
+      it('seeded pagination: different seeds give different pages', () => {
+        const p1 = preview(ast(), 10, { seed: 1, offset: 10 }).domains;
+        const p2 = preview(ast(), 10, { seed: 2, offset: 10 }).domains;
+        expect(p1).not.toEqual(p2);
+      });
+
+      it('previewDocument pagination', () => {
+        const { lines } = prepareDocument('[a-z]{3}.com\n[a-z]{3}.net');
+        const doc = parseDocument(lines);
+        const p1 = previewDocument(doc, 50).domains;
+        const p2 = previewDocument(doc, 50, { offset: 50 }).domains;
+        expect(p1.some(d => p2.includes(d))).toBe(false);
+      });
+
+      it('previewDocument seeded pagination', () => {
+        const { lines } = prepareDocument('[a-z]{3}.com\n[a-z]{3}.net');
+        const doc = parseDocument(lines);
+        const p1 = previewDocument(doc, 20, { seed: 7, offset: 0 }).domains;
+        const p2 = previewDocument(doc, 20, { seed: 7, offset: 20 }).domains;
+        expect(p1.some(d => p2.includes(d))).toBe(false);
+      });
+    });
+
+    describe('previewDocument with seed', () => {
+      it('is deterministic', () => {
+        const { lines } = prepareDocument('@tlds = {com,net}\n[a-z]{3}.@tlds');
+        const doc = parseDocument(lines);
+        const a = previewDocument(doc, 10, { seed: 1 });
+        const b = previewDocument(doc, 10, { seed: 1 });
+        expect(a.domains).toEqual(b.domains);
+      });
+
+      it('different seeds give different results', () => {
+        const { lines } = prepareDocument('@tlds = {com,net}\n[a-z]{3}.@tlds');
+        const doc = parseDocument(lines);
+        const a = previewDocument(doc, 10, { seed: 1 });
+        const b = previewDocument(doc, 10, { seed: 2 });
+        expect(a.domains).not.toEqual(b.domains);
+      });
+
+      it('samples across multiple expressions', () => {
+        // Two equal-sized expressions; both should appear in a large enough sample
+        const { lines } = prepareDocument('[a-z]{3}.com\n[a-z]{3}.net');
+        const doc = parseDocument(lines);
+        const result = previewDocument(doc, 100, { seed: 42 });
+        const hasCom = result.domains.some(d => d.endsWith('.com'));
+        const hasNet = result.domains.some(d => d.endsWith('.net'));
+        expect(hasCom).toBe(true);
+        expect(hasNet).toBe(true);
+      });
+
+      it('includes seed in result', () => {
+        const { lines } = prepareDocument('[a-z]{3}.com\n[a-z]{3}.net');
+        const doc = parseDocument(lines);
+        const result = previewDocument(doc, 10, { seed: 99 });
+        expect(result.seed).toBe(99);
+        expect(result.truncated).toBe(true);
+      });
     });
   });
 

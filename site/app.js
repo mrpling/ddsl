@@ -6,9 +6,49 @@ const countEl = document.getElementById('count');
 const resultsEl = document.getElementById('results');
 const errorEl = document.getElementById('error');
 const lineStatusEl = document.getElementById('line-status');
+const limitInput = document.getElementById('limit-input');
+const sampleToggle = document.getElementById('sample-toggle');
+const seedInput = document.getElementById('seed-input');
+const seedGroup = document.getElementById('seed-group');
+const paginationEl = document.getElementById('pagination');
+const prevBtn = document.getElementById('prev-btn');
+const nextBtn = document.getElementById('next-btn');
 
-const PREVIEW_LIMIT = 50;
 const MAX_EXPANSION = 1_000_000;
+
+let currentOffset = 0;
+let currentParsed = null;
+
+function getLimit() {
+  return Math.max(1, parseInt(limitInput.value, 10) || 50);
+}
+
+function getSeed() {
+  return sampleToggle.checked ? (parseInt(seedInput.value, 10) || 0) : undefined;
+}
+
+function updateSeedState() {
+  const on = sampleToggle.checked;
+  seedInput.disabled = !on;
+  seedGroup.classList.toggle('muted', !on);
+}
+
+sampleToggle.addEventListener('change', updateSeedState);
+updateSeedState();
+
+function hidePagination() {
+  paginationEl.hidden = true;
+}
+
+function updatePagination(truncated) {
+  if (!truncated && currentOffset === 0) {
+    hidePagination();
+    return;
+  }
+  paginationEl.hidden = false;
+  prevBtn.disabled = currentOffset === 0;
+  nextBtn.disabled = !truncated;
+}
 
 function showError(message) {
   errorEl.textContent = message;
@@ -18,19 +58,26 @@ function showError(message) {
   countEl.classList.remove('has-results');
   copyBtn.hidden = true;
   lineStatusEl.textContent = '';
+  hidePagination();
 }
 
 function clearError() {
   errorEl.hidden = true;
 }
 
-function displayResults(domains, total, cap = null) {
+function displayResults(domains, total, cap = null, seed = undefined, offset = 0) {
   clearError();
   resultsEl.value = domains.join('\n');
 
   let countText = `Expands to ${total.toLocaleString()} domain${total === 1 ? '' : 's'}`;
   if (cap !== null && domains.length < total) {
-    countText += `, showing first ${cap.toLocaleString()}`;
+    if (seed !== undefined) {
+      countText += `, sampled ${cap.toLocaleString()} (seed ${seed})`;
+    } else if (offset > 0) {
+      countText += `, showing ${(offset + 1).toLocaleString()}–${(offset + domains.length).toLocaleString()}`;
+    } else {
+      countText += `, showing first ${cap.toLocaleString()}`;
+    }
   }
 
   countEl.textContent = countText;
@@ -66,6 +113,27 @@ function showLargeSizeWarning(size) {
   countEl.classList.add('has-results');
   copyBtn.hidden = true;
   lineStatusEl.textContent = '';
+  hidePagination();
+}
+
+function runCheck() {
+  if (!currentParsed) return;
+  const { mode, doc, ast } = currentParsed;
+  const limit = getLimit();
+  const seed = getSeed();
+  const previewOpts = { offset: currentOffset };
+  if (seed !== undefined) previewOpts.seed = seed;
+
+  try {
+    const result = mode === 'document'
+      ? DDSL.previewDocument(doc, limit, previewOpts)
+      : DDSL.preview(ast, limit, previewOpts);
+
+    displayResults(result.domains, result.total, limit, result.seed, currentOffset);
+    updatePagination(result.truncated);
+  } catch (err) {
+    showError(err.message);
+  }
 }
 
 function check() {
@@ -77,27 +145,25 @@ function check() {
     copyBtn.hidden = true;
     lineStatusEl.textContent = '';
     clearError();
+    hidePagination();
+    currentParsed = null;
     return;
   }
 
   try {
-    const { size, mode, doc, ast } = getExpansionSize(raw);
+    currentParsed = getExpansionSize(raw);
+    currentOffset = 0;
 
-    // Check if expansion is too large
-    if (size > MAX_EXPANSION) {
-      showLargeSizeWarning(size);
+    if (currentParsed.size > MAX_EXPANSION) {
+      showLargeSizeWarning(currentParsed.size);
+      currentParsed = null;
       return;
     }
 
-    if (mode === 'document') {
-      const result = DDSL.previewDocument(doc, PREVIEW_LIMIT);
-      displayResults(result.domains, result.total, result.truncated ? PREVIEW_LIMIT : null);
-    } else {
-      const result = DDSL.preview(ast, PREVIEW_LIMIT);
-      displayResults(result.domains, result.total, result.truncated ? PREVIEW_LIMIT : null);
-    }
+    runCheck();
   } catch (err) {
     showError(err.message);
+    currentParsed = null;
   }
 }
 
@@ -110,37 +176,47 @@ function expandAll(bypassLimit = false) {
     copyBtn.hidden = true;
     lineStatusEl.textContent = '';
     clearError();
+    hidePagination();
+    currentParsed = null;
     return;
   }
 
   try {
-    const { size, mode, doc, ast } = getExpansionSize(raw);
+    const parsed = getExpansionSize(raw);
 
-    // Check if expansion is too large and user hasn't confirmed
-    if (!bypassLimit && size > MAX_EXPANSION) {
+    if (!bypassLimit && parsed.size > MAX_EXPANSION) {
       const confirmed = confirm(
-        `This expression would expand to ${size.toLocaleString()} domains, ` +
+        `This expression would expand to ${parsed.size.toLocaleString()} domains, ` +
         `which exceeds the limit of ${MAX_EXPANSION.toLocaleString()}.\n\n` +
         `This may cause your browser to become unresponsive.\n\n` +
         `Continue anyway?`
       );
       if (!confirmed) {
-        showLargeSizeWarning(size);
+        showLargeSizeWarning(parsed.size);
         return;
       }
     }
 
-    if (mode === 'document') {
-      const domains = DDSL.expandDocument(doc, { maxExpansion: Infinity });
-      displayResults(domains, domains.length, null);
-    } else {
-      const domains = DDSL.expand(ast, { maxExpansion: Infinity });
-      displayResults(domains, domains.length, null);
-    }
+    const domains = parsed.mode === 'document'
+      ? DDSL.expandDocument(parsed.doc, { maxExpansion: Infinity })
+      : DDSL.expand(parsed.ast, { maxExpansion: Infinity });
+
+    displayResults(domains, domains.length, null);
+    hidePagination();
   } catch (err) {
     showError(err.message);
   }
 }
+
+prevBtn.addEventListener('click', () => {
+  currentOffset = Math.max(0, currentOffset - getLimit());
+  runCheck();
+});
+
+nextBtn.addEventListener('click', () => {
+  currentOffset += getLimit();
+  runCheck();
+});
 
 async function copyToClipboard() {
   const text = resultsEl.value;
@@ -180,7 +256,6 @@ function updateLineStatus() {
   const totalLines = text.split('\n').length;
 
   if (selStart !== selEnd) {
-    // Text is selected
     const selectedText = text.substring(selStart, selEnd);
     const selectedLines = selectedText.split('\n').length;
     lineStatusEl.textContent = `${selectedLines} line${selectedLines === 1 ? '' : 's'} selected (Line ${currentLine} of ${totalLines})`;

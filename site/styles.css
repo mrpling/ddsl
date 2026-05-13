@@ -111,6 +111,56 @@ textarea::placeholder {
   margin-top: 1rem;
 }
 
+.options {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.option-group {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  transition: opacity 0.15s;
+}
+
+.option-group label {
+  display: inline;
+  font-weight: normal;
+  margin-bottom: 0;
+}
+
+.option-group input[type="number"] {
+  width: 72px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.option-group input[type="number"]:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.option-group input[type="checkbox"] {
+  accent-color: var(--primary);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.option-group.muted {
+  opacity: 0.35;
+}
+
 .btn {
   padding: 0.6rem 1.25rem;
   border: none;
@@ -200,6 +250,13 @@ textarea::placeholder {
 
 .results-textarea::placeholder {
   color: var(--text-muted);
+}
+
+.pagination {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  margin-bottom: 0.5rem;
 }
 
 .line-status {

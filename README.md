@@ -1,4 +1,4 @@
-# DDSL v0.3.4
+# DDSL v0.4.0
 
 A declarative language for describing sets of domain names using structural patterns.
 
@@ -114,27 +114,43 @@ const domains = expandDocument(doc);
 
 ### `preview(ast, limit, options?)`
 
-Preview an expansion with a capped result set. Returns a `PreviewResult` with `domains`, `total`, and `truncated`. Throws `ExpansionError` if the total expansion size exceeds `maxExpansion`.
+Preview an expansion with a capped result set. Returns a `PreviewResult` with `domains`, `total`, `truncated`, and optionally `seed`. Throws `ExpansionError` if the total expansion size exceeds `maxExpansion`.
+
+Without `seed`, returns the first `limit` domains in expansion order (prefix slice, backwards-compatible). With `seed`, samples `limit` domains deterministically from across the full space using index-based selection — no full expansion needed.
 
 ```ts
 import { parse, preview } from 'ddsl';
 
-const ast = parse('[a-z]{10}.com');
-const result = preview(ast, 100, { maxExpansion: Infinity });
-// { domains: [...100 items], total: 141167095653376, truncated: true }
+const ast = parse('[a-z]{3}.ai'); // 17,576 domains
+
+// Existing behaviour — prefix slice
+preview(ast, 10);
+// { domains: ['aaa.ai', 'aab.ai', ...], total: 17576, truncated: true }
+
+// Deterministic sampling
+preview(ast, 10, { seed: 42 });
+// { domains: ['bax.ai', 'tog.ai', ...], total: 17576, truncated: true, seed: 42 }
 ```
 
 ### `previewDocument(doc, limit, options?)`
 
-Preview a document expansion with a capped result set. Throws `ExpansionError` if the total expansion size exceeds `maxExpansion`.
+Preview a document expansion with a capped result set. Supports the same `seed` option as `preview`. With `seed`, samples proportionally across all expressions by their expansion size.
+
+Throws `ExpansionError` if the total expansion size exceeds `maxExpansion`.
 
 ```ts
 import { parseDocument, prepareDocument, previewDocument } from 'ddsl';
 
-const lines = prepareDocument(input);
+const { lines } = prepareDocument(input);
 const doc = parseDocument(lines);
+
+// Prefix slice
 const result = previewDocument(doc, 100);
 // { domains: [...], total: number, truncated: boolean }
+
+// Deterministic sampling across all expressions
+const sampled = previewDocument(doc, 100, { seed: 42 });
+// { domains: [...], total: number, truncated: true, seed: 42 }
 ```
 
 ### `expansionSize(ast)`
@@ -199,13 +215,18 @@ try {
 
 ```ts
 ddsl('[a-z]{4}.ai', { maxExpansion: 500_000 });
+preview(ast, 50, { seed: 42 });
+preview(ast, 50, { offset: 50 });           // page 2
+preview(ast, 50, { seed: 42, offset: 50 }); // page 2 of a seeded sample
 ```
 
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `maxExpansion` | `number` | `1,000,000` | Maximum domains to produce. Throws `ExpansionError` if exceeded. Set to `Infinity` to disable. |
+| `seed` | `number` | — | Seed for deterministic sampling in `preview`/`previewDocument`. When set, results are sampled from across the expansion space rather than taken from the prefix. The same seed always produces the same sample. |
+| `offset` | `number` | `0` | Number of results to skip. Use with a fixed `limit` to paginate: page N starts at `offset = N * limit`. Works with or without `seed`. Returned in `PreviewResult.offset`. |
 
-## DDSL v0.3.4 Syntax
+## DDSL v0.4.0 Syntax
 
 | Element | Example | Description |
 |---|---|---|
@@ -253,11 +274,11 @@ cdn.@env.example.@tlds
 
 ## Stability / Versioning
 
-Spec-first: behavior follows spec.md, v0.3.4 may change; breaking changes will be noted in CHANGELOG.md
+Spec-first: behavior follows spec.md, DDSL v0.4.0 may change; breaking changes will be noted in CHANGELOG.md
 
 ## Specification
 
-Full specification for DDSl v0.3.4, [v0.3.4 spec](https://github.com/mrpling/ddsl/blob/main/spec.md) 
+Full specification, [DDSL v0.4.0 spec](https://github.com/mrpling/ddsl/blob/main/spec.md) 
 
 The reference implementation is available at [ddsl.app](https://ddsl.app).
 

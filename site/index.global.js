@@ -955,11 +955,32 @@ var DDSL = (() => {
   }
   function preview(ast, limit, options) {
     const maxExpansion = options?.maxExpansion ?? DEFAULT_MAX_EXPANSION;
+    const seed = options?.seed;
+    const offset = options?.offset ?? 0;
     const total = expansionSize(ast);
     if (maxExpansion > 0 && maxExpansion !== Infinity && total > maxExpansion) {
       throw new ExpansionError(
         `Expression would expand to ${total.toLocaleString()} domains, which exceeds the limit of ${maxExpansion.toLocaleString()}`
       );
+    }
+    const atIndex = (idx) => domainAtIndex(ast, idx);
+    if (seed !== void 0 && total > limit && Number.isFinite(total)) {
+      const domains2 = sampleFromSpace(total, limit, seed, atIndex, offset);
+      const result = { domains: domains2, total, truncated: true, seed };
+      if (offset > 0) result.offset = offset;
+      return result;
+    }
+    if (offset > 0) {
+      const seen2 = /* @__PURE__ */ new Set();
+      for (let i = offset; i < offset + limit && i < total; i++) {
+        seen2.add(atIndex(i));
+      }
+      return {
+        domains: [...seen2],
+        total,
+        truncated: offset + limit < total,
+        offset
+      };
     }
     const labelSets = ast.labels.map(expandLabel);
     const seen = /* @__PURE__ */ new Set();
@@ -973,6 +994,8 @@ var DDSL = (() => {
   }
   function previewDocument(doc, limit, options) {
     const maxExpansion = options?.maxExpansion ?? DEFAULT_MAX_EXPANSION;
+    const seed = options?.seed;
+    const offset = options?.offset ?? 0;
     setVariables(doc.variables);
     try {
       const total = calcDocumentSize(doc);
@@ -980,6 +1003,37 @@ var DDSL = (() => {
         throw new ExpansionError(
           `Document would expand to ${total.toLocaleString()} domains, which exceeds the limit of ${maxExpansion.toLocaleString()}`
         );
+      }
+      const useSeeded = seed !== void 0 && total > limit && Number.isFinite(total);
+      const useOffset = offset > 0 && Number.isFinite(total);
+      if (useSeeded || useOffset) {
+        const exprSizes = doc.expressions.map(expansionSize);
+        const atIndex = (idx) => {
+          let remaining = idx;
+          for (let i = 0; i < doc.expressions.length; i++) {
+            if (remaining < exprSizes[i]) {
+              return domainAtIndex(doc.expressions[i], remaining);
+            }
+            remaining -= exprSizes[i];
+          }
+          return "";
+        };
+        if (useSeeded) {
+          const domains = sampleFromSpace(total, limit, seed, atIndex, offset);
+          const result = { domains, total, truncated: true, seed };
+          if (offset > 0) result.offset = offset;
+          return result;
+        }
+        const seen = /* @__PURE__ */ new Set();
+        for (let i = offset; i < offset + limit && i < total; i++) {
+          seen.add(atIndex(i));
+        }
+        return {
+          domains: [...seen],
+          total,
+          truncated: offset + limit < total,
+          offset
+        };
       }
       const allDomains = /* @__PURE__ */ new Set();
       for (const expr of doc.expressions) {
@@ -998,6 +1052,132 @@ var DDSL = (() => {
     } finally {
       clearVariables();
     }
+  }
+  function mulberry32(seed) {
+    let s = seed >>> 0;
+    return () => {
+      s = s + 1831565813 >>> 0;
+      let t = Math.imul(s ^ s >>> 15, 1 | s);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) >>> 0;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  function suffixProducts(sizes) {
+    const sp = new Array(sizes.length + 1);
+    sp[sizes.length] = 1;
+    for (let i = sizes.length - 1; i >= 0; i--) {
+      sp[i] = sp[i + 1] * sizes[i];
+    }
+    return sp;
+  }
+  function domainAtIndex(ast, index) {
+    const sizes = ast.labels.map(labelExpansionSize);
+    const sp = suffixProducts(sizes);
+    const parts = [];
+    for (let i = 0; i < sizes.length; i++) {
+      parts.push(labelAtIndex(ast.labels[i], Math.floor(index / sp[i + 1]) % sizes[i]));
+    }
+    return parts.join(".");
+  }
+  function labelAtIndex(label, index) {
+    return sequenceAtIndex(label.elements, index);
+  }
+  function sequenceAtIndex(elements, index) {
+    if (elements.length === 0) return "";
+    const sizes = elements.map(elementExpansionSize);
+    const sp = suffixProducts(sizes);
+    let result = "";
+    for (let i = 0; i < elements.length; i++) {
+      result += elementAtIndex(elements[i], Math.floor(index / sp[i + 1]) % sizes[i]);
+    }
+    return result;
+  }
+  function elementAtIndex(element, index) {
+    if (element.optional) {
+      return index === 0 ? "" : primaryAtIndex(element.primary, index - 1);
+    }
+    return primaryAtIndex(element.primary, index);
+  }
+  function primaryAtIndex(primary, index) {
+    switch (primary.type) {
+      case "literal":
+        return primary.value;
+      case "charclass":
+        return charClassAtIndex(primary.chars, primary.repetitionMin, primary.repetitionMax, index);
+      case "alternation": {
+        let remaining = index;
+        for (const option of primary.options) {
+          const size = sequenceExpansionSize(option);
+          if (remaining < size) return sequenceAtIndex(option, remaining);
+          remaining -= size;
+        }
+        return "";
+      }
+      case "group":
+        return groupAtIndex(primary.elements, primary.repetitionMin, primary.repetitionMax, index);
+      case "varref": {
+        const varElements = variableMap.get(primary.name);
+        if (!varElements) return "";
+        return sequenceAtIndex(varElements, index);
+      }
+    }
+  }
+  function charClassAtIndex(chars, min, max, index) {
+    let remaining = index;
+    for (let rep = min; rep <= max; rep++) {
+      const repSize = rep === 0 ? 1 : Math.pow(chars.length, rep);
+      if (remaining < repSize) return charClassFixedAtIndex(chars, rep, remaining);
+      remaining -= repSize;
+    }
+    return "";
+  }
+  function charClassFixedAtIndex(chars, rep, index) {
+    if (rep === 0) return "";
+    const C = chars.length;
+    const parts = new Array(rep);
+    let remaining = index;
+    for (let i = rep - 1; i >= 0; i--) {
+      parts[i] = chars[remaining % C];
+      remaining = Math.floor(remaining / C);
+    }
+    return parts.join("");
+  }
+  function groupAtIndex(elements, min, max, index) {
+    const B = sequenceExpansionSize(elements);
+    let remaining = index;
+    for (let rep = min; rep <= max; rep++) {
+      const repSize = rep === 0 ? 1 : Math.pow(B, rep);
+      if (remaining < repSize) {
+        if (rep === 0) return "";
+        const parts = new Array(rep);
+        let idx = remaining;
+        for (let j = rep - 1; j >= 0; j--) {
+          parts[j] = sequenceAtIndex(elements, idx % B);
+          idx = Math.floor(idx / B);
+        }
+        return parts.join("");
+      }
+      remaining -= repSize;
+    }
+    return "";
+  }
+  function sampleFromSpace(total, limit, seed, atIndex, offset = 0) {
+    const rng = mulberry32(seed);
+    const seen = /* @__PURE__ */ new Set();
+    const skipAttempts = (offset + limit) * 3;
+    for (let attempt = 0; attempt < skipAttempts && seen.size < offset; attempt++) {
+      seen.add(atIndex(Math.floor(rng() * total)));
+    }
+    const page = [];
+    const collectAttempts = limit * 3;
+    for (let attempt = 0; attempt < collectAttempts && page.length < limit; attempt++) {
+      const domain = atIndex(Math.floor(rng() * total));
+      if (!seen.has(domain)) {
+        seen.add(domain);
+        page.push(domain);
+      }
+    }
+    return page;
   }
   function expandLabel(label) {
     return expandSequence(label.elements);

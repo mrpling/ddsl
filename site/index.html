@@ -30,6 +30,20 @@ example.@tlds"
           <button id="check-btn" class="btn btn-secondary">Check</button>
           <button id="expand-btn" class="btn btn-primary">Expand All</button>
         </div>
+        <div class="options">
+          <span class="option-group">
+            <label for="limit-input">Limit</label>
+            <input type="number" id="limit-input" value="50" min="1" max="10000">
+          </span>
+          <span class="option-group">
+            <input type="checkbox" id="sample-toggle">
+            <label for="sample-toggle">Sample</label>
+          </span>
+          <span class="option-group" id="seed-group">
+            <label for="seed-input">Seed</label>
+            <input type="number" id="seed-input" value="42" min="0" disabled>
+          </span>
+        </div>
         <div id="error" class="error" hidden></div>
       </div>
 
@@ -37,6 +51,10 @@ example.@tlds"
         <div class="results-header">
           <span id="count">Enter an expression to expand</span>
           <button id="copy-btn" class="btn btn-small" hidden>Copy</button>
+        </div>
+        <div id="pagination" class="pagination" hidden>
+          <button id="prev-btn" class="btn btn-small" disabled>&#8592; Prev</button>
+          <button id="next-btn" class="btn btn-small">Next &#8594;</button>
         </div>
         <textarea id="results" class="results-textarea" placeholder="Results will appear here"></textarea>
         <div id="line-status" class="line-status"></div>

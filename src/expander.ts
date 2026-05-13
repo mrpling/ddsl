@@ -33,6 +33,18 @@ export interface ExpandOptions {
    * Default: 1,000,000
    */
   maxExpansion?: number;
+  /**
+   * Seed for deterministic sampling. When provided, results are sampled
+   * from across the expansion space rather than taken from the prefix.
+   * The same seed always produces the same sample.
+   */
+  seed?: number;
+  /**
+   * Number of results to skip before collecting `limit` items.
+   * Use with a fixed `seed` to paginate through a deterministic sample,
+   * or without a seed to paginate through the prefix ordering.
+   */
+  offset?: number;
 }
 
 export interface PreviewResult {
@@ -42,6 +54,10 @@ export interface PreviewResult {
   total: number;
   /** Whether the results were truncated due to the limit */
   truncated: boolean;
+  /** The seed used for deterministic sampling, if any */
+  seed?: number;
+  /** The offset used, if any */
+  offset?: number;
 }
 
 // Variable storage for expansion
@@ -245,10 +261,19 @@ export function expandDocument(doc: DocumentNode, options?: ExpandOptions): stri
 
 /**
  * Preview an expansion with a capped result set.
+ *
+ * Without `seed` or `offset`: returns the first `limit` domains in expansion order.
+ * With `offset` (no seed): returns the next `limit` domains starting at that position —
+ *   use the same `limit` and incrementing `offset` to paginate.
+ * With `seed`: samples `limit` domains deterministically from across the full space.
+ * With `seed` + `offset`: paginates through a seeded sample (same seed, skip `offset` unique results).
+ *
  * Throws ExpansionError if total expansion size exceeds maxExpansion.
  */
 export function preview(ast: DomainNode, limit: number, options?: ExpandOptions): PreviewResult {
   const maxExpansion = options?.maxExpansion ?? DEFAULT_MAX_EXPANSION;
+  const seed = options?.seed;
+  const offset = options?.offset ?? 0;
   const total = expansionSize(ast);
 
   if (maxExpansion > 0 && maxExpansion !== Infinity && total > maxExpansion) {
@@ -256,6 +281,28 @@ export function preview(ast: DomainNode, limit: number, options?: ExpandOptions)
       `Expression would expand to ${total.toLocaleString()} domains, ` +
       `which exceeds the limit of ${maxExpansion.toLocaleString()}`,
     );
+  }
+
+  const atIndex = (idx: number) => domainAtIndex(ast, idx);
+
+  if (seed !== undefined && total > limit && Number.isFinite(total)) {
+    const domains = sampleFromSpace(total, limit, seed, atIndex, offset);
+    const result: PreviewResult = { domains, total, truncated: true, seed };
+    if (offset > 0) result.offset = offset;
+    return result;
+  }
+
+  if (offset > 0) {
+    const seen = new Set<string>();
+    for (let i = offset; i < offset + limit && i < total; i++) {
+      seen.add(atIndex(i));
+    }
+    return {
+      domains: [...seen],
+      total,
+      truncated: offset + limit < total,
+      offset,
+    };
   }
 
   const labelSets = ast.labels.map(expandLabel);
@@ -272,10 +319,19 @@ export function preview(ast: DomainNode, limit: number, options?: ExpandOptions)
 
 /**
  * Preview a document expansion with a capped result set.
+ *
+ * Without `seed` or `offset`: returns the first `limit` domains in expansion order.
+ * With `offset` (no seed): paginates through the combined document index space.
+ * With `seed`: samples `limit` domains deterministically across all expressions,
+ *   proportionally weighted by each expression's expansion size.
+ * With `seed` + `offset`: paginates through a seeded sample.
+ *
  * Throws ExpansionError if total expansion size exceeds maxExpansion.
  */
 export function previewDocument(doc: DocumentNode, limit: number, options?: ExpandOptions): PreviewResult {
   const maxExpansion = options?.maxExpansion ?? DEFAULT_MAX_EXPANSION;
+  const seed = options?.seed;
+  const offset = options?.offset ?? 0;
 
   setVariables(doc.variables);
 
@@ -287,6 +343,42 @@ export function previewDocument(doc: DocumentNode, limit: number, options?: Expa
         `Document would expand to ${total.toLocaleString()} domains, ` +
         `which exceeds the limit of ${maxExpansion.toLocaleString()}`,
       );
+    }
+
+    const useSeeded = seed !== undefined && total > limit && Number.isFinite(total);
+    const useOffset = offset > 0 && Number.isFinite(total);
+
+    if (useSeeded || useOffset) {
+      const exprSizes = doc.expressions.map(expansionSize);
+      const atIndex = (idx: number): string => {
+        let remaining = idx;
+        for (let i = 0; i < doc.expressions.length; i++) {
+          if (remaining < exprSizes[i]) {
+            return domainAtIndex(doc.expressions[i], remaining);
+          }
+          remaining -= exprSizes[i];
+        }
+        return '';
+      };
+
+      if (useSeeded) {
+        const domains = sampleFromSpace(total, limit, seed!, atIndex, offset);
+        const result: PreviewResult = { domains, total, truncated: true, seed };
+        if (offset > 0) result.offset = offset;
+        return result;
+      }
+
+      // Unseeded offset pagination
+      const seen = new Set<string>();
+      for (let i = offset; i < offset + limit && i < total; i++) {
+        seen.add(atIndex(i));
+      }
+      return {
+        domains: [...seen],
+        total,
+        truncated: offset + limit < total,
+        offset,
+      };
     }
 
     const allDomains = new Set<string>();
@@ -310,6 +402,171 @@ export function previewDocument(doc: DocumentNode, limit: number, options?: Expa
     clearVariables();
   }
 }
+
+// ---------------------------------------------------------------------------
+// Deterministic sampling — index-based domain lookup
+// ---------------------------------------------------------------------------
+
+// Mulberry32 PRNG — returns a function yielding floats in [0, 1).
+function mulberry32(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) >>> 0;
+    return ((t ^ (t >>> 14)) >>> 0) / 0x100000000;
+  };
+}
+
+// Suffix products: sp[i] = sizes[i] × sizes[i+1] × … × sizes[n-1], sp[n] = 1.
+// Used to decompose a flat index into per-component indices for Cartesian products.
+function suffixProducts(sizes: number[]): number[] {
+  const sp = new Array<number>(sizes.length + 1);
+  sp[sizes.length] = 1;
+  for (let i = sizes.length - 1; i >= 0; i--) {
+    sp[i] = sp[i + 1] * sizes[i];
+  }
+  return sp;
+}
+
+function domainAtIndex(ast: DomainNode, index: number): string {
+  const sizes = ast.labels.map(labelExpansionSize);
+  const sp = suffixProducts(sizes);
+  const parts: string[] = [];
+  for (let i = 0; i < sizes.length; i++) {
+    parts.push(labelAtIndex(ast.labels[i], Math.floor(index / sp[i + 1]) % sizes[i]));
+  }
+  return parts.join('.');
+}
+
+function labelAtIndex(label: LabelNode, index: number): string {
+  return sequenceAtIndex(label.elements, index);
+}
+
+function sequenceAtIndex(elements: ElementNode[], index: number): string {
+  if (elements.length === 0) return '';
+  const sizes = elements.map(elementExpansionSize);
+  const sp = suffixProducts(sizes);
+  let result = '';
+  for (let i = 0; i < elements.length; i++) {
+    result += elementAtIndex(elements[i], Math.floor(index / sp[i + 1]) % sizes[i]);
+  }
+  return result;
+}
+
+function elementAtIndex(element: ElementNode, index: number): string {
+  if (element.optional) {
+    // index 0 = '' (absent), indices 1…primarySize = primary[index-1]
+    return index === 0 ? '' : primaryAtIndex(element.primary, index - 1);
+  }
+  return primaryAtIndex(element.primary, index);
+}
+
+function primaryAtIndex(primary: PrimaryNode, index: number): string {
+  switch (primary.type) {
+    case 'literal':
+      return primary.value;
+
+    case 'charclass':
+      return charClassAtIndex(primary.chars, primary.repetitionMin, primary.repetitionMax, index);
+
+    case 'alternation': {
+      let remaining = index;
+      for (const option of primary.options) {
+        const size = sequenceExpansionSize(option);
+        if (remaining < size) return sequenceAtIndex(option, remaining);
+        remaining -= size;
+      }
+      return '';
+    }
+
+    case 'group':
+      return groupAtIndex(primary.elements, primary.repetitionMin, primary.repetitionMax, index);
+
+    case 'varref': {
+      const varElements = variableMap.get(primary.name);
+      if (!varElements) return '';
+      return sequenceAtIndex(varElements, index);
+    }
+  }
+}
+
+function charClassAtIndex(chars: string[], min: number, max: number, index: number): string {
+  let remaining = index;
+  for (let rep = min; rep <= max; rep++) {
+    const repSize = rep === 0 ? 1 : Math.pow(chars.length, rep);
+    if (remaining < repSize) return charClassFixedAtIndex(chars, rep, remaining);
+    remaining -= repSize;
+  }
+  return '';
+}
+
+// Treat index as a base-C number of length rep (big-endian).
+function charClassFixedAtIndex(chars: string[], rep: number, index: number): string {
+  if (rep === 0) return '';
+  const C = chars.length;
+  const parts = new Array<string>(rep);
+  let remaining = index;
+  for (let i = rep - 1; i >= 0; i--) {
+    parts[i] = chars[remaining % C];
+    remaining = Math.floor(remaining / C);
+  }
+  return parts.join('');
+}
+
+function groupAtIndex(elements: ElementNode[], min: number, max: number, index: number): string {
+  const B = sequenceExpansionSize(elements);
+  let remaining = index;
+  for (let rep = min; rep <= max; rep++) {
+    const repSize = rep === 0 ? 1 : Math.pow(B, rep);
+    if (remaining < repSize) {
+      if (rep === 0) return '';
+      const parts = new Array<string>(rep);
+      let idx = remaining;
+      for (let j = rep - 1; j >= 0; j--) {
+        parts[j] = sequenceAtIndex(elements, idx % B);
+        idx = Math.floor(idx / B);
+      }
+      return parts.join('');
+    }
+    remaining -= repSize;
+  }
+  return '';
+}
+
+// Sample limit unique domains from [0, total) using a seeded PRNG.
+// offset skips the first N unique results so pages can be fetched consistently.
+// maxAttempts caps retries for the (rare) case where sampled indices collide.
+function sampleFromSpace(
+  total: number,
+  limit: number,
+  seed: number,
+  atIndex: (idx: number) => string,
+  offset: number = 0,
+): string[] {
+  const rng = mulberry32(seed);
+  const seen = new Set<string>();
+  // Skip past the first `offset` unique results.
+  const skipAttempts = (offset + limit) * 3;
+  for (let attempt = 0; attempt < skipAttempts && seen.size < offset; attempt++) {
+    seen.add(atIndex(Math.floor(rng() * total)));
+  }
+  // Collect the next `limit` unique results.
+  const page: string[] = [];
+  const collectAttempts = limit * 3;
+  for (let attempt = 0; attempt < collectAttempts && page.length < limit; attempt++) {
+    const domain = atIndex(Math.floor(rng() * total));
+    if (!seen.has(domain)) {
+      seen.add(domain);
+      page.push(domain);
+    }
+  }
+  return page;
+}
+
+// ---------------------------------------------------------------------------
+// Expansion
+// ---------------------------------------------------------------------------
 
 function expandLabel(label: LabelNode): string[] {
   return expandSequence(label.elements);
