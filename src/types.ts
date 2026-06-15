@@ -1,8 +1,8 @@
 /**
- * DDSL v0.3 — AST Node Types
+ * DDSL - AST Node Types
  *
  * These types mirror the formal grammar defined in Section 7
- * of the DDSL v0.3 specification.
+ * of the DDSL specification.
  */
 
 /** A complete DDSL document with variable definitions and expressions. */

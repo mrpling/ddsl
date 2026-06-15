@@ -2,7 +2,7 @@
 
 A declarative language for describing sets of domain names using structural patterns.
 
-DDSL is a Domain-Specific Language about domains — a compact, human-readable way to express domain name spaces that expands into finite, deterministic sets.
+DDSL is a Domain-Specific Language about domains - a compact, human-readable way to express domain name spaces that expands into finite, deterministic sets.
 
 ## Quick Example
 
@@ -75,7 +75,7 @@ const ast = parse('car(s)?.com');
 
 ### `parseDocument(lines, lineNumbers?)`
 
-Parse prepared document lines into a document AST. The optional `lineNumbers` array (parallel to `lines`) maps each line to its original source line number. When provided, `ParseError.line` reflects the actual source line rather than the preprocessed index — useful for highlighting errors in an editor.
+Parse prepared document lines into a document AST. The optional `lineNumbers` array (parallel to `lines`) maps each line to its original source line number. When provided, `ParseError.line` reflects the actual source line rather than the preprocessed index - useful for highlighting errors in an editor.
 
 ```ts
 import { parseDocument, prepareDocument } from 'ddsl';
@@ -116,14 +116,14 @@ const domains = expandDocument(doc);
 
 Preview an expansion with a capped result set. Returns a `PreviewResult` with `domains`, `total`, `truncated`, and optionally `seed`. Throws `ExpansionError` if the total expansion size exceeds `maxExpansion`.
 
-Without `seed`, returns the first `limit` domains in expansion order (prefix slice, backwards-compatible). With `seed`, samples `limit` domains deterministically from across the full space using index-based selection — no full expansion needed.
+Without `seed`, returns the first `limit` domains in expansion order (prefix slice, backwards-compatible). With `seed`, samples `limit` domains deterministically from across the full space using index-based selection - no full expansion needed.
 
 ```ts
 import { parse, preview } from 'ddsl';
 
 const ast = parse('[a-z]{3}.ai'); // 17,576 domains
 
-// Existing behaviour — prefix slice
+// Existing behaviour - prefix slice
 preview(ast, 10);
 // { domains: ['aaa.ai', 'aab.ai', ...], total: 17576, truncated: true }
 
@@ -223,7 +223,7 @@ preview(ast, 50, { seed: 42, offset: 50 }); // page 2 of a seeded sample
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `maxExpansion` | `number` | `1,000,000` | Maximum domains to produce. Throws `ExpansionError` if exceeded. Set to `Infinity` to disable. |
-| `seed` | `number` | — | Seed for deterministic sampling in `preview`/`previewDocument`. When set, results are sampled from across the expansion space rather than taken from the prefix. The same seed always produces the same sample. |
+| `seed` | `number` | - | Seed for deterministic sampling in `preview`/`previewDocument`. When set, results are sampled from across the expansion space rather than taken from the prefix. The same seed always produces the same sample. |
 | `offset` | `number` | `0` | Number of results to skip. Use with a fixed `limit` to paginate: page N starts at `offset = N * limit`. Works with or without `seed`. Returned in `PreviewResult.offset`. |
 
 ## DDSL v0.4.1 Syntax
@@ -236,8 +236,8 @@ preview(ast, 50, { seed: 42, offset: 50 }); // page 2 of a seeded sample
 | Repetition | `[a-z]{3}` | Fixed repetition |
 | Range | `[a-z]{2,4}` | Variable-length sequences |
 | Negation | `[^aeiou]` | Exclude characters |
-| Named class (standalone) | `[:v:]` | Vowels — one character, like `[a-z]{1}` |
-| Named class (standalone) | `[:c:]` | Consonants — one character |
+| Named class (standalone) | `[:v:]` | Vowels - one character, like `[a-z]{1}` |
+| Named class (standalone) | `[:c:]` | Consonants - one character |
 | Named class (in bracket) | `[[:v:]]` | Vowels inside a bracket class |
 | Named class (in bracket) | `[[:c:]0-9]` | Consonants and digits combined |
 | Grouping | `(abc)` | Group elements together |

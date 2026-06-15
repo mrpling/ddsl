@@ -1,5 +1,5 @@
 /**
- * DDSL v0.3 — Expander
+ * DDSL Expander
  *
  * Takes a parsed DDSL AST and expands it into the complete finite set
  * of domain names. Implements the semantics from Section 10 of the
@@ -263,7 +263,7 @@ export function expandDocument(doc: DocumentNode, options?: ExpandOptions): stri
  * Preview an expansion with a capped result set.
  *
  * Without `seed` or `offset`: returns the first `limit` domains in expansion order.
- * With `offset` (no seed): returns the next `limit` domains starting at that position —
+ * With `offset` (no seed): returns the next `limit` domains starting at that position -
  *   use the same `limit` and incrementing `offset` to paginate.
  * With `seed`: samples `limit` domains deterministically from across the full space.
  * With `seed` + `offset`: paginates through a seeded sample (same seed, skip `offset` unique results).
@@ -404,10 +404,10 @@ export function previewDocument(doc: DocumentNode, limit: number, options?: Expa
 }
 
 // ---------------------------------------------------------------------------
-// Deterministic sampling — index-based domain lookup
+// Deterministic sampling - index-based domain lookup
 // ---------------------------------------------------------------------------
 
-// Mulberry32 PRNG — returns a function yielding floats in [0, 1).
+// Mulberry32 PRNG - returns a function yielding floats in [0, 1).
 function mulberry32(seed: number): () => number {
   let s = seed >>> 0;
   return () => {

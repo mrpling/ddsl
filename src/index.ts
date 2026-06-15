@@ -1,5 +1,5 @@
 /**
- * DDSL v0.3 — Reference Implementation
+ * DDSL - Reference Implementation
  *
  * A declarative language for describing sets of domain names
  * using structural patterns.
@@ -43,7 +43,7 @@ export type { ExpandOptions, PreviewResult } from './expander';
 /**
  * Parse and expand a DDSL expression in one step.
  *
- * @param expression - A valid DDSL v0.3 expression
+ * @param expression - A valid DDSL expression
  * @param options - Expansion options (e.g. maxExpansion limit)
  * @returns Array of domain name strings
  *
@@ -68,7 +68,7 @@ export function ddsl(expression: string, options?: ExpandOptions): string[] {
 /**
  * Parse and expand a DDSL document (multi-line with variables) in one step.
  *
- * @param input - A valid DDSL v0.3 document
+ * @param input - A valid DDSL document
  * @param options - Expansion options (e.g. maxExpansion limit)
  * @returns Array of domain name strings
  *

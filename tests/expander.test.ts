@@ -236,7 +236,7 @@ describe('expander', () => {
       expect(result.domains).toHaveLength(10);
     });
 
-    it('is deterministic — same seed, same result', () => {
+    it('is deterministic - same seed, same result', () => {
       const a = preview(ast(), 10, { seed: 42 });
       const b = preview(ast(), 10, { seed: 42 });
       expect(a.domains).toEqual(b.domains);

@@ -1,7 +1,7 @@
 {
   "name": "ddsl",
   "version": "0.4.1",
-  "description": "DDSL — a declarative language for describing sets of domain names",
+  "description": "DDSL - a declarative language for describing sets of domain names",
   "keywords": [
     "domain",
     "dsl",

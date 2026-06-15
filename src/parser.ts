@@ -1,5 +1,5 @@
 /**
- * DDSL v0.3 — Parser
+ * DDSL - Parser
  *
  * A recursive descent parser that transforms a DDSL expression string
  * into an AST (see types.ts). Implements the grammar from Section 7
@@ -188,7 +188,7 @@ export function parseDocument(lines: string[], lineNumbers?: number[]): Document
         // Variable definition
         const eqIdx = line.indexOf('=');
         if (eqIdx === -1) {
-          // Expression starting with a variable reference — substitution may shift
+          // Expression starting with a variable reference - substitution may shift
           // positions, so offset stays 0 (best effort).
           const substituted = substituteVariables(line, varStrings);
           const domain = parseExpression(substituted, new Map());
@@ -220,7 +220,7 @@ export function parseDocument(lines: string[], lineNumbers?: number[]): Document
           variables.push({ type: 'vardef', name, elements });
         }
       } else {
-        // Expression — no offset needed when there are no variable references
+        // Expression - no offset needed when there are no variable references
         // (substituted === line). With substitution, positions are best effort.
         const substituted = substituteVariables(line, varStrings);
         const domain = parseExpression(substituted, new Map());
