@@ -63,8 +63,9 @@ describe('parser', () => {
       expect(ast.labels[0].elements[0].primary.type).toBe('alternation');
     });
 
-    it('rejects single-option alternation', () => {
-      expect(() => parse('{car}.com')).toThrow(ParseError);
+    it('parses single-option alternation', () => {
+      const ast = parse('{car}.com');
+      expect(ast.labels[0].elements[0].primary.type).toBe('alternation');
     });
   });
 

@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## - 2026-06-15 - v0.4.1
+- Changed minimum number of alternation options to one.
+
 ## - 2026-05-13 - v0.4.0
 - Deterministic sampling and offset (pagination) added as options to preview and previewDocument. 
 

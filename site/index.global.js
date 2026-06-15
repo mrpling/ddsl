@@ -356,8 +356,8 @@ var DDSL = (() => {
         throw new ParseError(`Expected '}' but found ${peek() ?? "end of input"}`, pos);
       }
       advance();
-      if (options.length < 2) {
-        throw new ParseError("Alternation must have at least two options", start);
+      if (options.length < 1) {
+        throw new ParseError("Alternation must have at least one option", start);
       }
       return { type: "alternation", options };
     }
@@ -673,8 +673,8 @@ var DDSL = (() => {
         throw new ParseError(`Expected '}' but found ${peek() ?? "end of input"}`, pos);
       }
       advance();
-      if (options.length < 2) {
-        throw new ParseError("Alternation must have at least two options", start);
+      if (options.length < 1) {
+        throw new ParseError("Alternation must have at least one option", start);
       }
       return { type: "alternation", options };
     }

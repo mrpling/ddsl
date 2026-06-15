@@ -456,8 +456,8 @@ function parseSequenceString(input: string, varMap: Map<string, ElementNode[]>):
     }
     advance();
 
-    if (options.length < 2) {
-      throw new ParseError('Alternation must have at least two options', start);
+    if (options.length < 1) {
+      throw new ParseError('Alternation must have at least one option', start);
     }
 
     return { type: 'alternation', options };
@@ -858,8 +858,8 @@ function parseExpression(input: string, varMap: Map<string, ElementNode[]>): Dom
     }
     advance();
 
-    if (options.length < 2) {
-      throw new ParseError('Alternation must have at least two options', start);
+    if (options.length < 1) {
+      throw new ParseError('Alternation must have at least one option', start);
     }
 
     return { type: 'alternation', options };
