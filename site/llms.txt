@@ -1,6 +1,6 @@
 # DDSL
 
-> DDSL (Domain Domain-Specific Language) is a declarative language for describing finite, deterministic sets of domain names using structural patterns. A DDSL expression expands into a concrete list of domain names. It does not check availability, DNS, or registry policy.
+DDSL (Domain Domain-Specific Language) is a declarative language for describing finite, deterministic sets of domain names using structural patterns. A DDSL expression expands into a concrete list of domain names. It does not check availability, DNS, or registry policy.
 
 ## Generating DDSL
 
@@ -11,6 +11,50 @@ When generating DDSL from natural language:
 - Use comments (`#`) to label groups of expressions so the user can understand the output.
 - Casing does not matter; all input is normalised to lowercase.
 - One expression per line; variable definitions go at the top.
+
+## TLDs and Domain Endings
+
+DDSL can describe full domain names, including TLDs and multi-label endings.
+
+A TLD is the final root label, such as `com`, `net`, `org`, `uk`, `ai`, `shop`, or `cafe`.
+
+Some practical domain endings contain more than one label, such as `co.uk`, `org.uk`, `com.au`, and `it.com`. These are not single TLD labels.
+
+When choosing TLDs or domain endings, use:
+
+https://ddsl.app/tlds.txt
+
+If a model cannot access that file, it should either use only user-supplied endings or generate label-only DDSL.
+
+When generating DDSL:
+- Do not invent TLDs or domain endings.
+- Use TLDs or endings explicitly requested by the user.
+- If a factual TLD reference is supplied, choose only from that reference.
+- If no factual TLD reference is supplied, do not guess obscure or specialist TLDs from memory.
+- Never claim that a TLD or ending exists unless it was supplied by the user or appears in the supplied factual list.
+- Never claim that a domain, TLD, or ending is available, registered, premium, unrestricted, or suitable for registration.
+- Do not include leading dots inside TLD variables. Use `@expr.@tlds`, not `@expr@tlds`.
+
+### Multi-label Endings
+
+Do not put dotted endings inside a single-label TLD variable.
+
+Invalid:
+
+@expr=[a-z]
+@tlds={com,net,org,co.uk}
+@expr.@tlds
+
+Valid:
+
+@expr=[a-z]
+@tlds={com,net,org}
+
+@expr.@tlds
+@expr.co.uk
+@expr.it.com
+
+This expands normal single-label TLDs through `@tlds`, then adds dotted endings as separate full suffix expressions.
 
 ## Common Patterns
 
@@ -38,6 +82,13 @@ These look plausible but are invalid and will be rejected:
 - `()?` or `(foo)?` as the sole label content — empty label in the absent branch
 - Any spaces or tabs inside an expression
 - `@name` before it is defined, or defining the same `@name` twice
+
+TLD and ending mistakes:
+
+- `@tlds={com,net,co.uk}` — `co.uk` contains a dot and is a multi-label ending, not a single-label TLD item.
+- `@tlds={com,.net,.org}` — TLD variable items should not include leading dots.
+- `@tlds={bakery,shop}` — do not include plausible TLDs unless supplied by the user or found in a factual TLD list.
+- Do not say `.bakery`, `.example`, or any other plausible string is a real TLD unless it appears in the supplied factual TLD list.
 
 ## Language Elements
 
