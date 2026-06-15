@@ -1,0 +1,224 @@
+# DDSL
+
+DDSL (Domain Domain-Specific Language) is a declarative language for describing finite, deterministic sets of domain names using structural patterns. A DDSL expression expands into a concrete list of domain names. It does not check availability, DNS, or registry policy.
+
+## Generating DDSL
+
+When generating DDSL from natural language:
+
+- Output raw DDSL only - no markdown code fences, no explanation, no surrounding text.
+- Prefer document mode (see below) - it is more readable, supports comments to label intent, and is accepted everywhere single expressions are.
+- Use comments (`#`) to label groups of expressions so the user can understand the output.
+- Casing does not matter; all input is normalised to lowercase.
+- One expression per line; variable definitions go at the top.
+
+## TLDs and Domain Endings
+
+DDSL can describe full domain names, including TLDs and multi-label endings.
+
+A TLD is the final root label, such as `com`, `net`, `org`, `uk`, `ai`, `shop`, or `cafe`.
+
+Some practical domain endings contain more than one label, such as `co.uk`, `org.uk`, `com.au`, and `it.com`. These are not single TLD labels.
+
+When choosing TLDs or domain endings, use:
+
+https://ddsl.app/tlds.txt
+
+If you cannot access the TLD reference, do not choose TLDs yourself. Use only user-supplied endings, or generate label-only DDSL.
+
+When generating DDSL:
+- Do not invent TLDs or domain endings.
+- Use TLDs or endings explicitly requested by the user.
+- If a factual TLD reference is supplied, choose only from that reference.
+- If no factual TLD reference is supplied, do not guess TLDs from memory except for common examples explicitly requested by the user.
+- Never claim that a TLD or ending exists unless it was supplied by the user or appears in the supplied factual list.
+- Never claim that a domain, TLD, or ending is available, registered, premium, unrestricted, or suitable for registration.
+- Do not include leading dots inside TLD variables. Use `@expr.@tlds`, not `@expr@tlds`.
+
+### Multi-label Endings
+
+Do not put dotted endings inside a single-label TLD variable.
+
+Invalid:
+
+@expr=[a-z]
+@tlds={com,net,org,co.uk}
+@expr.@tlds
+
+Valid:
+
+@expr=[a-z]
+@tlds={com,net,org}
+
+@expr.@tlds
+@expr.co.uk
+@expr.it.com
+
+This expands normal single-label TLDs through `@tlds`, then adds dotted endings as separate full suffix expressions.
+
+## Common Patterns
+
+| Intent | DDSL |
+|---|---|
+| One of several words | `{word1,word2,word3}.com` |
+| Word with optional suffix | `word(suffix)?.com` |
+| Word with or without hyphen variant | `{word,word-variant}.com` |
+| Any N-letter combination | `[a-z]{N}.com` |
+| Consonant-vowel-consonant | `[:c:][:v:][:c:].com` |
+| Prefix shared across TLDs | `@tlds = {com,net}` / `prefix.@tlds` |
+| Multiple patterns, shared TLDs | `@tlds = {com,io}` / `expr1.@tlds` / `expr2.@tlds` |
+| Structured prefix + one of | `{smart{car,bike},fast{boat,plane}}.com` |
+| Pattern with version suffix | `api(-v[0-9])?.io` |
+
+Hyphens must appear in literals or alternation items - they are not part of the character class universe and cannot appear inside `[...]`.
+
+## Do Not Generate
+
+These look plausible but are invalid and will be rejected:
+
+- `[a-z-]` - hyphen inside a character class
+- `{}` or `{,word}` - empty alternation or empty alternation item
+- `[^]` - empty character class body
+- `()?` or `(foo)?` as the sole label content - empty label in the absent branch
+- Any spaces or tabs inside an expression
+- `@name` before it is defined, or defining the same `@name` twice
+
+TLD and ending mistakes:
+
+- `@tlds={com,net,co.uk}` - `co.uk` contains a dot and is a multi-label ending, not a single-label TLD item.
+- `@tlds={com,.net,.org}` - TLD variable items should not include leading dots.
+- `@tlds={bakery,shop}` - do not include plausible TLDs unless supplied by the user or found in a factual TLD list.
+- Do not say `.bakery`, `.example`, or any other plausible string is a real TLD unless it appears in the supplied factual TLD list.
+
+## Language Elements
+
+| Element | Syntax | Description |
+|---|---|---|
+| Literal | `car` | Fixed text - letters, digits, hyphens |
+| Alternation | `{car,bike}` | One or more comma-separated options |
+| Character class | `[a-z]` | One character from the set; defaults to `{1}` |
+| Negated class | `[^aeiou]` | One character from the universe (a-z, 0-9) excluding the listed chars |
+| Named class | `[:v:]` / `[:c:]` | Vowels (a e i o u) or consonants; usable standalone or inside `[...]` |
+| Repetition | `{3}` / `{2,4}` | Fixed or range repetition on a class or group |
+| Group | `(abc)` | Parenthesised sequence; scopes `?` and repetition |
+| Optional | `?` | Element is present or absent |
+| Variable | `@name` | Textual substitution of a named pattern (document mode only) |
+| Comment | `# text` | Ignored (document mode only) |
+
+The character class universe is a-z and 0-9 (36 characters). Hyphens are valid in literals but not in character classes.
+
+## Rules and Constraints
+
+- Input is normalised to lowercase before parsing.
+- Whitespace inside an expression is invalid and causes rejection.
+- Labels (text between dots) MUST be non-empty in every expansion branch.
+- Alternation requires at least one option; items must be non-empty.
+- Groups and character class bodies must be non-empty.
+- Repetition must satisfy `0 <= min <= max`.
+- Duplicate domain names are removed from the final expansion.
+- Variables must be defined before use; redefinition and cycles are invalid.
+- Variable substitution is textual; the result must still be valid DDSL.
+
+## Expression Examples
+
+```
+example.com                            → example.com
+{car,bike}.com                         → car.com, bike.com
+car(s)?.com                            → car.com, cars.com
+[a-z].io                               → 26 one-letter .io domains
+[^aeiou]{3}.com                        → 29,791 three-char domains (consonants + digits)
+[:c:][:v:][:c:].ai                     → 2,205 CVC .ai domains
+(ab){2,3}.com                          → abab.com, ababab.com
+{smart{car,bike},fast{boat,plane}}.com → smartcar.com, smartbike.com, fastboat.com, fastplane.com
+{api,dev}(-v[0-9])?.io                 → api.io, dev.io, api-v0.io … dev-v9.io
+```
+
+## Document Mode
+
+Document mode is the preferred output format. It supports variables, comments, and multiple expressions. Both single expressions and documents are accepted by rdap.ai.
+
+Example:
+
+```
+@tlds = {com,net,org}
+@env  = {dev,staging,prod}
+
+# API endpoints
+api.@env.example.@tlds
+
+# CDN endpoints
+cdn.@env.example.@tlds
+```
+
+Output is the union of all expression expansions, deduplicated.
+
+Preprocessing steps (before parsing): strip comments, trim whitespace, remove blank lines, normalise to lowercase, strip spaces around `=` in variable definitions.
+
+## TypeScript / JavaScript API
+
+```ts
+import { ddsl, ddslDocument, parse, expand, preview, expansionSize } from 'ddsl';
+
+// Expand a single expression
+ddsl('{car,bike}.com');
+// → ['car.com', 'bike.com']
+
+// Expand a document
+ddslDocument(`
+  @tlds = {com,net}
+  api.example.@tlds
+`);
+// → ['api.example.com', 'api.example.net']
+
+// Parse then expand separately
+const ast = parse('[a-z]{3}.ai');
+expand(ast);                       // full expansion (17,576 domains)
+expansionSize(ast);                // 17576 - without expanding
+
+// Preview: first N results
+preview(ast, 10);
+// → { domains: ['aaa.ai', ...], total: 17576, truncated: true }
+
+// Preview: deterministic sample
+preview(ast, 10, { seed: 42 });
+// → { domains: ['bax.ai', ...], total: 17576, truncated: true, seed: 42 }
+
+// Paginate a sample: page 2
+preview(ast, 10, { seed: 42, offset: 10 });
+```
+
+### Key API Functions
+
+| Function | Description |
+|---|---|
+| `ddsl(expr, opts?)` | Parse and expand a single expression |
+| `ddslDocument(input, opts?)` | Parse and expand a multi-line document |
+| `parse(expr)` | Parse expression → AST |
+| `parseDocument(lines, lineNumbers?)` | Parse prepared document lines → document AST |
+| `expand(ast, opts?)` | Expand AST → string[] |
+| `expandDocument(doc, opts?)` | Expand document AST → string[] |
+| `preview(ast, limit, opts?)` | Expand up to `limit` results; returns `{ domains, total, truncated }` |
+| `previewDocument(doc, limit, opts?)` | Same for documents |
+| `expansionSize(ast)` | Count total results without expanding |
+| `documentExpansionSize(doc)` | Same for documents |
+| `prepare(input)` | Strip whitespace from a single expression before parsing |
+| `prepareDocument(input)` | Preprocess a document; returns `{ lines, lineNumbers }` |
+
+### Options
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `maxExpansion` | `number` | `1000000` | Throws `ExpansionError` if exceeded. Set to `Infinity` to disable. |
+| `seed` | `number` | - | Deterministic sampling seed for `preview` / `previewDocument`. |
+| `offset` | `number` | `0` | Skip N results; use with fixed `limit` to paginate. |
+
+### Errors
+
+- `ParseError` - invalid syntax; has `.line`, `.position`, `.rawMessage`
+- `ExpansionError` - expansion exceeds `maxExpansion`
+
+## Links
+
+- Specification: https://github.com/mrpling/ddsl/blob/main/spec.md
+- npm: https://www.npmjs.com/package/ddsl
+- Reference implementation: https://ddsl.app
