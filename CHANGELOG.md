@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## - 2026-07-01 - v0.4.2
+- Rationalised preprocessing of whitespace
+
 ## - 2026-06-15 - v0.4.1
 - Changed minimum number of alternation options to one.
 

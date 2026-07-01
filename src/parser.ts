@@ -88,7 +88,7 @@ export function prepare(input: string): string {
 
 /**
  * Prepare a multi-line document for parsing.
- * Strips comments, trims lines, removes empty lines, normalizes case.
+ * Strips comments, strips whitespace, removes empty lines, normalizes case.
  * Returns both the processed lines and their original 1-based source line numbers,
  * which can be passed to parseDocument() for accurate ParseError.line values.
  */
@@ -98,7 +98,8 @@ export function prepareDocument(input: string): { lines: string[]; lineNumbers: 
 
   input.split('\n').forEach((raw, i) => {
     const commentIdx = raw.indexOf('#');
-    const text = (commentIdx !== -1 ? raw.slice(0, commentIdx) : raw).trim().toLowerCase();
+    const withoutComment = commentIdx !== -1 ? raw.slice(0, commentIdx) : raw;
+    const text = prepare(withoutComment).toLowerCase();
     if (text.length > 0) {
       lines.push(text);
       lineNumbers.push(i + 1);

@@ -1,4 +1,4 @@
-# DDSL v0.4.1 Specification
+# DDSL v0.4.2 Specification
 
 ## 1. Introduction
 
@@ -19,7 +19,7 @@ DDSL describes possible domain names, not their availability, value, or DNS beha
 
 ## 2. Design Goals
 
-DDSL v0.4.1 is designed to be:
+DDSL v0.4.2 is designed to be:
 
 **Declarative**
 Expressions describe what domains exist in the set, not how to generate them.
@@ -128,9 +128,13 @@ Output domain names MUST be lowercase.
 
 ### 5.4 Whitespace
 
-Within expressions, whitespace is not permitted. Spaces and tabs inside an expression MUST cause the parser to reject it.
+The formal DDSL grammar does not include whitespace inside expressions.
 
-In document mode, newlines separate statements. See Section 7 for the document-level grammar and Section 13 for preprocessing.
+Before parsing, implementations MAY preprocess user input by removing whitespace from each expression or document statement. In document mode, newlines separate statements and MUST NOT be removed as part of whitespace preprocessing.
+
+After preprocessing, any remaining whitespace inside an expression is invalid and MUST cause the parser to reject it.
+
+See Section 13 for document-level preprocessing.
 
 ### 5.5 Character Class Universe
 
@@ -148,7 +152,7 @@ The hyphen (`-`) is a valid literal character in domain labels but is not part o
 
 ## 6. Syntax Overview
 
-DDSL v0.4.1 supports:
+DDSL v0.4.2 supports:
 
 - Literal text
 - Alternation `{...}`
@@ -299,7 +303,7 @@ empty       = "" ;
 newline     = "\n" ;
 ```
 
-Note: in document mode, comments and leading/trailing whitespace on each line are stripped during preprocessing before the expression parser sees the input. The `=` in variable definitions MAY be surrounded by spaces during preprocessing; implementations SHOULD tolerate this.
+Note: in document mode, preprocessing is applied per line before the parser sees each statement. Comments are stripped, empty lines are removed, input is normalised to lowercase, and whitespace MAY be removed from each remaining statement. Newlines remain statement separators and MUST NOT be removed by whole-document whitespace stripping.
 
 ### 7.2 Expression-Level Grammar
 
@@ -619,16 +623,16 @@ dev-v9.io
 
 ## 12. Conformance
 
-An implementation conforms to DDSL v0.4.1 if it:
+An implementation conforms to DDSL v0.4.2 if it:
 
 - Accepts all valid expressions and documents
-- Rejects invalid expressions (including those containing whitespace)
+- Rejects invalid expressions, including expressions that still contain whitespace after preprocessing
 - Resolves variables correctly per Section 8
 - Expands to the correct finite set
 - Deduplicates results
 - Normalises output as specified
 
-Single-expression mode (without document features) is a valid subset. An implementation that only supports single expressions (no variables, no multi-line, no comments) conforms to DDSL v0.4.1 expression-level conformance but not document-level conformance.
+Single-expression mode (without document features) is a valid subset. An implementation that only supports single expressions (no variables, no multi-line, no comments) conforms to DDSL v0.4.2 expression-level conformance but not document-level conformance.
 
 ---
 
@@ -638,13 +642,14 @@ Implementations that support document mode SHOULD preprocess input as follows:
 
 1. Split input into lines.
 2. For each line, strip everything from `#` to end of line (comments).
-3. Trim leading and trailing whitespace from each line.
+3. Remove whitespace from each remaining line.
 4. Remove empty lines.
 5. Normalise to lowercase.
-6. For variable definitions, strip spaces around `=`.
-7. Pass each remaining line to the parser as a statement.
+6. Pass each remaining line to the parser as a statement.
 
-Within expressions (after preprocessing), whitespace is still invalid and MUST cause rejection.
+In document mode, preprocessing is line-based. Newlines separate statements and MUST NOT be removed by applying whitespace stripping to the whole document at once.
+
+After preprocessing, any remaining whitespace inside an expression is invalid and MUST cause rejection.
 
 Case normalisation is part of the core parser (Section 5.3). Preprocessing MAY also normalise case as a convenience, but the parser MUST NOT rely on preprocessing having done so.
 
@@ -678,7 +683,7 @@ Future versions may introduce:
 - Objective metrics
 - Extension profiles
 
-These features are intentionally excluded from DDSL v0.4.1 to preserve simplicity and stability.
+These features are intentionally excluded from DDSL v0.4.2 to preserve simplicity and stability.
 
 ---
 

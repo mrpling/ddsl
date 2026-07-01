@@ -88,7 +88,8 @@ var DDSL = (() => {
     const lineNumbers = [];
     input.split("\n").forEach((raw, i) => {
       const commentIdx = raw.indexOf("#");
-      const text = (commentIdx !== -1 ? raw.slice(0, commentIdx) : raw).trim().toLowerCase();
+      const withoutComment = commentIdx !== -1 ? raw.slice(0, commentIdx) : raw;
+      const text = prepare(withoutComment).toLowerCase();
       if (text.length > 0) {
         lines.push(text);
         lineNumbers.push(i + 1);
