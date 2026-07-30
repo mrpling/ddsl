@@ -68,6 +68,19 @@ var DDSL = (() => {
   function isVarNameChar(ch) {
     return isLetter(ch) || isDigit(ch) || ch === "-";
   }
+  function scanVariableName(str, start) {
+    if (str[start] === "-") {
+      throw new ParseError("Variable names cannot start with a hyphen", start);
+    }
+    let end = start;
+    while (end < str.length && isVarNameChar(str[end])) {
+      end++;
+    }
+    while (end > start && str[end - 1] === "-") {
+      end--;
+    }
+    return { name: str.slice(start, end), end };
+  }
   function expandRange(start, end) {
     const s = start.charCodeAt(0);
     const e = end.charCodeAt(0);
@@ -123,11 +136,9 @@ var DDSL = (() => {
         continue;
       }
       i++;
-      let name = "";
-      while (i < line.length && isVarNameChar(line[i])) {
-        name += line[i];
-        i++;
-      }
+      const scanned = scanVariableName(line, i);
+      const name = scanned.name;
+      i = scanned.end;
       if (name.length === 0) {
         throw new ParseError("Empty variable name", i);
       }
@@ -160,6 +171,9 @@ var DDSL = (() => {
             positionOffset = eqIdx + 1 + (rawValue.length - rawValue.trimStart().length);
             if (name.length === 0) {
               throw new ParseError("Empty variable name", 0);
+            }
+            if (name.startsWith("-") || name.endsWith("-")) {
+              throw new ParseError("Variable names cannot start or end with a hyphen", 0);
             }
             if (varStrings.has(name)) {
               throw new ParseError(`Variable @${name} is already defined`, 0);
@@ -273,10 +287,9 @@ var DDSL = (() => {
     }
     function parseVarRef() {
       advance();
-      let name = "";
-      while (pos < src.length && isVarNameChar(peek())) {
-        name += advance();
-      }
+      const scanned = scanVariableName(src, pos);
+      const name = scanned.name;
+      pos = scanned.end;
       if (name.length === 0) {
         throw new ParseError("Empty variable name", pos);
       }
@@ -590,10 +603,9 @@ var DDSL = (() => {
     }
     function parseVarRef() {
       advance();
-      let name = "";
-      while (pos < src.length && isVarNameChar(peek())) {
-        name += advance();
-      }
+      const scanned = scanVariableName(src, pos);
+      const name = scanned.name;
+      pos = scanned.end;
       if (name.length === 0) {
         throw new ParseError("Empty variable name", pos);
       }

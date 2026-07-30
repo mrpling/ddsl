@@ -62,6 +62,30 @@ function isVarNameChar(ch: string): boolean {
 }
 
 /**
+ * Scan a variable name starting at `start` (the position right after '@').
+ * Names may contain interior hyphens but must not start or end with one, so
+ * a trailing hyphen run is left unconsumed (as literal characters) rather
+ * than absorbed into the name - e.g. `@prefix-@postfix` resolves as
+ * `@prefix` followed by a literal `-`, not the undefined name `prefix-`.
+ */
+function scanVariableName(str: string, start: number): { name: string; end: number } {
+  if (str[start] === '-') {
+    throw new ParseError('Variable names cannot start with a hyphen', start);
+  }
+
+  let end = start;
+  while (end < str.length && isVarNameChar(str[end])) {
+    end++;
+  }
+
+  while (end > start && str[end - 1] === '-') {
+    end--;
+  }
+
+  return { name: str.slice(start, end), end };
+}
+
+/**
  * Expand a character range like 'a'-'z' or '0'-'9' into an array of
  * individual characters.
  */
@@ -146,11 +170,9 @@ function substituteVariables(line: string, varStrings: Map<string, string>): str
 
     // Consume '@' and variable name
     i++;
-    let name = '';
-    while (i < line.length && isVarNameChar(line[i])) {
-      name += line[i];
-      i++;
-    }
+    const scanned = scanVariableName(line, i);
+    const name = scanned.name;
+    i = scanned.end;
 
     if (name.length === 0) {
       throw new ParseError('Empty variable name', i);
@@ -203,6 +225,10 @@ export function parseDocument(lines: string[], lineNumbers?: number[]): Document
 
           if (name.length === 0) {
             throw new ParseError('Empty variable name', 0);
+          }
+
+          if (name.startsWith('-') || name.endsWith('-')) {
+            throw new ParseError('Variable names cannot start or end with a hyphen', 0);
           }
 
           if (varStrings.has(name)) {
@@ -352,10 +378,9 @@ function parseSequenceString(input: string, varMap: Map<string, ElementNode[]>):
 
   function parseVarRef(): VarRefNode {
     advance(); // consume '@'
-    let name = '';
-    while (pos < src.length && isVarNameChar(peek()!)) {
-      name += advance();
-    }
+    const scanned = scanVariableName(src, pos);
+    const name = scanned.name;
+    pos = scanned.end;
     if (name.length === 0) {
       throw new ParseError('Empty variable name', pos);
     }
@@ -755,10 +780,9 @@ function parseExpression(input: string, varMap: Map<string, ElementNode[]>): Dom
 
   function parseVarRef(): VarRefNode {
     advance(); // consume '@'
-    let name = '';
-    while (pos < src.length && isVarNameChar(peek()!)) {
-      name += advance();
-    }
+    const scanned = scanVariableName(src, pos);
+    const name = scanned.name;
+    pos = scanned.end;
     if (name.length === 0) {
       throw new ParseError('Empty variable name', pos);
     }

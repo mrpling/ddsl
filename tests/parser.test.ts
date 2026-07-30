@@ -186,6 +186,29 @@ describe('parser', () => {
       const { lines } = prepareDocument('@a = {com,net}\n@b = @a\nexample.@b');
       expect(() => parseDocument(lines)).not.toThrow();
     });
+
+    it('allows hyphens in the interior of a variable name', () => {
+      const { lines } = prepareDocument('@my-var = {com,net}\nexample.@my-var');
+      const doc = parseDocument(lines);
+      expect(doc.variables[0].name).toBe('my-var');
+    });
+
+    it('rejects variable definition starting with a hyphen', () => {
+      const { lines } = prepareDocument('@-foo = bar\nexample.com');
+      expect(() => parseDocument(lines)).toThrow(ParseError);
+    });
+
+    it('rejects variable definition ending with a hyphen', () => {
+      const { lines } = prepareDocument('@foo- = bar\nexample.com');
+      expect(() => parseDocument(lines)).toThrow(ParseError);
+    });
+
+    it('does not let a trailing hyphen be absorbed into a variable reference name', () => {
+      const { lines } = prepareDocument('@prefix = foo\n@postfix = bar\n@prefix-@postfix.com');
+      const doc = parseDocument(lines);
+      const label = doc.expressions[0].labels[0];
+      expect(label.elements[0].primary).toEqual({ type: 'literal', value: 'foo-bar' });
+    });
   });
 
   describe('repetition vs alternation disambiguation', () => {

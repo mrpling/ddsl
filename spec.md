@@ -248,7 +248,7 @@ Definition syntax: `@name = sequence`
 
 Reference syntax: `@name` (inline within an expression)
 
-Variable names consist of letters, digits, and hyphens. They are case-insensitive.
+Variable names consist of letters, digits, and hyphens, and MUST NOT start or end with a hyphen. They are case-insensitive.
 
 See Section 8 for variable semantics and scoping rules.
 
@@ -295,8 +295,9 @@ comment     = "#", { any_char } ;
 
 var_def     = "@", var_name, "=", sequence ;
 
-var_name    = var_char, { var_char } ;
-var_char    = letter | digit | "-" ;
+var_name    = var_segment, { "-", var_segment } ;
+var_segment = var_alnum, { var_alnum } ;
+var_alnum   = letter | digit ;
 
 empty       = "" ;
 
@@ -396,6 +397,8 @@ Variables are scoped to the document in which they are defined. They have no per
 Variable names:
 
 - consist of letters, digits, and hyphens
+- MUST start and end with a letter or digit
+- MUST NOT contain consecutive hyphens
 - MUST NOT be empty
 - are case-insensitive (`@TLDs` and `@tlds` are the same variable)
 
