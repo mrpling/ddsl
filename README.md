@@ -1,4 +1,4 @@
-# DDSL v0.4.2
+# DDSL v0.4.3
 
 A declarative language for describing sets of domain names using structural patterns.
 
@@ -226,7 +226,7 @@ preview(ast, 50, { seed: 42, offset: 50 }); // page 2 of a seeded sample
 | `seed` | `number` | - | Seed for deterministic sampling in `preview`/`previewDocument`. When set, results are sampled from across the expansion space rather than taken from the prefix. The same seed always produces the same sample. |
 | `offset` | `number` | `0` | Number of results to skip. Use with a fixed `limit` to paginate: page N starts at `offset = N * limit`. Works with or without `seed`. Returned in `PreviewResult.offset`. |
 
-## DDSL v0.4.2 Syntax
+## DDSL v0.4.3 Syntax
 
 | Element | Example | Description |
 |---|---|---|
@@ -274,11 +274,11 @@ cdn.@env.example.@tlds
 
 ## Stability / Versioning
 
-Spec-first: behavior follows spec.md, DDSL v0.4.2 may change; breaking changes will be noted in CHANGELOG.md
+Spec-first: behavior follows spec.md, DDSL v0.4.3 may change; breaking changes will be noted in CHANGELOG.md
 
 ## Specification
 
-Full specification, [DDSL v0.4.2 spec](https://github.com/mrpling/ddsl/blob/main/spec.md) 
+Full specification, [DDSL v0.4.3 spec](https://github.com/mrpling/ddsl/blob/main/spec.md) 
 
 The reference implementation is available at [ddsl.app](https://ddsl.app).
 

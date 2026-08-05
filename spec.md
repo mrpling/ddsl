@@ -1,4 +1,4 @@
-# DDSL v0.4.2 Specification
+# DDSL v0.4.3 Specification
 
 ## 1. Introduction
 
@@ -19,7 +19,7 @@ DDSL describes possible domain names, not their availability, value, or DNS beha
 
 ## 2. Design Goals
 
-DDSL v0.4.2 is designed to be:
+DDSL v0.4.3 is designed to be:
 
 **Declarative**
 Expressions describe what domains exist in the set, not how to generate them.
@@ -152,7 +152,7 @@ The hyphen (`-`) is a valid literal character in domain labels but is not part o
 
 ## 6. Syntax Overview
 
-DDSL v0.4.2 supports:
+DDSL v0.4.3 supports:
 
 - Literal text
 - Alternation `{...}`
@@ -626,7 +626,7 @@ dev-v9.io
 
 ## 12. Conformance
 
-An implementation conforms to DDSL v0.4.2 if it:
+An implementation conforms to DDSL v0.4.3 if it:
 
 - Accepts all valid expressions and documents
 - Rejects invalid expressions, including expressions that still contain whitespace after preprocessing
@@ -635,7 +635,7 @@ An implementation conforms to DDSL v0.4.2 if it:
 - Deduplicates results
 - Normalises output as specified
 
-Single-expression mode (without document features) is a valid subset. An implementation that only supports single expressions (no variables, no multi-line, no comments) conforms to DDSL v0.4.2 expression-level conformance but not document-level conformance.
+Single-expression mode (without document features) is a valid subset. An implementation that only supports single expressions (no variables, no multi-line, no comments) conforms to DDSL v0.4.3 expression-level conformance but not document-level conformance.
 
 ---
 
@@ -686,7 +686,7 @@ Future versions may introduce:
 - Objective metrics
 - Extension profiles
 
-These features are intentionally excluded from DDSL v0.4.2 to preserve simplicity and stability.
+These features are intentionally excluded from DDSL v0.4.3 to preserve simplicity and stability.
 
 ---
 

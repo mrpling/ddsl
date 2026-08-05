@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## - 2026-08-05 - v0.4.3
+- Hyphens not allowed at the beginning or end of variables
+
 ## - 2026-07-01 - v0.4.2
 - Rationalised preprocessing of whitespace
 
