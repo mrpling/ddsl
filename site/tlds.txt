@@ -8,6 +8,7 @@ Rules:
 - Single-label TLDs may be placed in @tlds={...}.
 - Multi-label endings such as co.uk MUST NOT be placed in @tlds={...}.
 - Use multi-label endings as separate suffix expressions.
+- Delegated TLDs may be restricted, reserved, or not yet open to public registration.
 
 Example:
 
@@ -46,6 +47,7 @@ cafe
 coffee
 catering
 cooking
+eat
 food
 kitchen
 menu
@@ -115,7 +117,7 @@ fitness
 health
 hospital
 med
-medical
+healthcare
 rehab
 surgery
 
@@ -123,8 +125,10 @@ surgery
 city
 country
 flights
+fly
+here
 holiday
-hotel
+hotels
 land
 place
 reisen

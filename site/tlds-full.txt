@@ -1,9 +1,10 @@
 # DDSL full single-label root TLD list
-# Source: IANA tlds-alpha-by-domain.txt
-# Version 2026061500, Last Updated Mon Jun 15 07:07:02 2026 UTC
+# Source: https://data.iana.org/TLD/tlds-alpha-by-domain.txt
+# Version 2026112000, Last Updated Fri Nov 20 07:07:01 2026 UTC
 # Values are lower-case single-label root TLDs with no leading dot.
 # These may be used inside DDSL variables such as @tlds={com,net,org}.
 # Multi-label endings such as co.uk are not TLDs and are listed separately in tlds-psl-full.txt.
+# Delegation does not mean an extension is open for public registration.
 
 [all-single-label-root-tlds]
 aaa
@@ -529,7 +530,6 @@ hdfcbank
 health
 healthcare
 help
-helsinki
 here
 hermes
 hiphop
@@ -626,7 +626,6 @@ jp
 jpmorgan
 jprs
 juegos
-juniper
 kaufen
 kddi
 ke
@@ -1240,6 +1239,7 @@ watch
 watches
 weather
 weatherchannel
+web
 webcam
 weber
 website
